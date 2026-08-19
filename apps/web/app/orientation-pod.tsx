@@ -5,19 +5,38 @@ import { useState } from 'react';
 const SUGGESTED_PROMPT =
   'Help me understand how a Ground → Pressure-test → Construct → Verify cycle would tackle a small, well-defined problem.';
 
-type SwarmTurn = {
+export type SwarmTurn = {
   agent: string;
   summary_conclusion: string;
   collapsed_reasoning?: string;
 };
 type Verdict = { verdict: string; score: number | null; pov_eligible: boolean };
+type Cycle = { question: string; turns: SwarmTurn[]; verdict?: Verdict | null };
 
 type OrientationPodProps = {
   podName: string;
   podSummary: string;
   initialRemainingPrompts: number;
-  initialHistory: SwarmTurn[];
+  initialCycles: { question: string; turns: SwarmTurn[] }[];
 };
+
+// Extracts @Veritas's trailing {...} verdict block for the collapsed-card badge.
+// Used for cycles reloaded from history, where we only have the raw turn text.
+function parseVerdictFromVeritasText(text: string | undefined): Verdict | null {
+  if (!text) return null;
+  const match = text.match(/\{[^{}]*\}(?!.*\{[^{}]*\})/s);
+  if (!match) return null;
+  try {
+    const parsed = JSON.parse(match[0]);
+    return {
+      verdict: parsed.verdict ?? 'unparseable',
+      score: typeof parsed.score === 'number' ? parsed.score : null,
+      pov_eligible: Boolean(parsed.pov_eligible),
+    };
+  } catch {
+    return null;
+  }
+}
 
 // Pre-account calmed landing (outline §5): mission first, one gentle call to action,
 // no raw message firehose. This is the Orientation Mini-Pod's entry surface.
@@ -25,19 +44,26 @@ export default function OrientationPod({
   podName,
   podSummary,
   initialRemainingPrompts,
-  initialHistory,
+  initialCycles,
 }: OrientationPodProps) {
   const [directorPrompt, setDirectorPrompt] = useState(SUGGESTED_PROMPT);
-  const [turns, setTurns] = useState<SwarmTurn[]>(initialHistory);
-  const [verdict, setVerdict] = useState<Verdict | null>(null);
-  const [expandedTurn, setExpandedTurn] = useState<number | null>(null);
+  const [cycles, setCycles] = useState<Cycle[]>(
+    initialCycles.map((cycle) => ({
+      ...cycle,
+      verdict: parseVerdictFromVeritasText(
+        cycle.turns.find((t) => t.agent === '@Veritas')?.summary_conclusion
+      ),
+    }))
+  );
+  const [expandedCycle, setExpandedCycle] = useState<number | null>(0);
+  const [pendingQuestion, setPendingQuestion] = useState<string | null>(null);
   const [status, setStatus] = useState<'idle' | 'thinking' | 'error' | 'limit_reached'>('idle');
   const [remainingPrompts, setRemainingPrompts] = useState(initialRemainingPrompts);
 
   async function handleDirect() {
     if (!directorPrompt.trim() || remainingPrompts <= 0) return;
     setStatus('thinking');
-    setTurns((prev) => [...prev, { agent: 'You', summary_conclusion: directorPrompt }]);
+    setPendingQuestion(directorPrompt);
 
     try {
       const res = await fetch('/api/orchestra', {
@@ -49,17 +75,23 @@ export default function OrientationPod({
       if (res.status === 429) {
         setStatus('limit_reached');
         setRemainingPrompts(0);
+        setPendingQuestion(null);
         return;
       }
       if (!res.ok) throw new Error('orchestra_unavailable');
 
       const data = await res.json();
-      setTurns((prev) => [...prev, ...(data.turns ?? [])]);
-      setVerdict(data.verification ?? null);
+      setCycles((prev) => [
+        { question: directorPrompt, turns: data.turns ?? [], verdict: data.verification ?? null },
+        ...prev,
+      ]);
+      setExpandedCycle(0);
+      setPendingQuestion(null);
       setRemainingPrompts((n) => Math.max(n - 1, 0));
       setStatus('idle');
     } catch {
       setStatus('error');
+      setPendingQuestion(null);
     }
   }
 
@@ -74,9 +106,8 @@ export default function OrientationPod({
         </h1>
         {podSummary && <p className="text-sm leading-relaxed text-calm-muted">{podSummary}</p>}
         <p className="text-xs text-calm-muted">
-          Every message below — yours and the swarm&apos;s — is saved to this pod, in order.
-          Nothing here is verified or worth Proof-of-Value until @Veritas says so at the end
-          of a cycle.
+          Every question below — yours and the swarm&apos;s — is saved to this pod. Nothing
+          here is verified or worth Proof-of-Value until @Veritas says so at the end of a cycle.
         </p>
       </header>
 
@@ -116,41 +147,62 @@ export default function OrientationPod({
         )}
       </section>
 
-      {turns.length > 0 && (
-        <section className="space-y-3">
-          {turns.map((turn, i) => (
-            <article key={i} className="rounded-lg border border-calm-border bg-calm-surface p-4">
-              <p className="text-xs uppercase tracking-wide text-calm-accent">{turn.agent}</p>
-              <p className="mt-1 text-sm text-calm-text">{turn.summary_conclusion}</p>
-              {turn.collapsed_reasoning && (
-                <button
-                  className="mt-2 text-xs text-calm-muted underline"
-                  onClick={() => setExpandedTurn(expandedTurn === i ? null : i)}
+      <section className="space-y-3">
+        {pendingQuestion && (
+          <article className="rounded-lg border border-calm-border bg-calm-surface p-4">
+            <p className="text-sm text-calm-text">{pendingQuestion}</p>
+            <p className="mt-2 text-xs text-calm-muted">Swarm is working…</p>
+          </article>
+        )}
+
+        {cycles.map((cycle, i) => {
+          const isExpanded = expandedCycle === i;
+          return (
+            <article key={i} className="rounded-lg border border-calm-border bg-calm-surface">
+              <button
+                onClick={() => setExpandedCycle(isExpanded ? null : i)}
+                className="flex w-full items-start justify-between gap-3 p-4 text-left"
+              >
+                <p className="text-sm text-calm-text">{cycle.question}</p>
+                <span
+                  className={`shrink-0 rounded-full border px-2 py-0.5 text-xs ${
+                    cycle.verdict?.pov_eligible
+                      ? 'border-calm-accent text-calm-accent'
+                      : 'border-calm-border text-calm-muted'
+                  }`}
                 >
-                  {expandedTurn === i ? 'Hide reasoning' : 'Show reasoning'}
-                </button>
-              )}
-              {expandedTurn === i && (
-                <p className="mt-2 text-xs text-calm-muted">{turn.collapsed_reasoning}</p>
+                  {cycle.verdict ? `${cycle.verdict.score ?? '—'}/100` : '…'}
+                </span>
+              </button>
+
+              {isExpanded && (
+                <div className="space-y-3 border-t border-calm-border p-4">
+                  {cycle.turns.map((turn, j) => (
+                    <div key={j}>
+                      <p className="text-xs uppercase tracking-wide text-calm-accent">
+                        {turn.agent}
+                      </p>
+                      <p className="mt-1 text-sm text-calm-text">{turn.summary_conclusion}</p>
+                    </div>
+                  ))}
+                  {cycle.verdict && (
+                    <p
+                      className={`text-xs ${
+                        cycle.verdict.pov_eligible ? 'text-calm-accent' : 'text-calm-muted'
+                      }`}
+                    >
+                      {cycle.verdict.pov_eligible
+                        ? `Verified — Proof-of-Value awarded to @Synthetix.`
+                        : `Not verified — no Proof-of-Value awarded.`}
+                    </p>
+                  )}
+                </div>
               )}
             </article>
-          ))}
-        </section>
-      )}
-
-      {verdict && (
-        <section
-          className={`rounded-lg border p-4 text-sm ${
-            verdict.pov_eligible
-              ? 'border-calm-accent text-calm-accent'
-              : 'border-calm-border text-calm-muted'
-          }`}
-        >
-          {verdict.pov_eligible
-            ? `@Veritas verified this artifact (score ${verdict.score}/100) — Proof-of-Value awarded to @Synthetix.`
-            : `@Veritas did not verify this artifact (score ${verdict.score ?? '—'}/100) — no Proof-of-Value awarded.`}
-        </section>
-      )}
+          );
+        })}
+      </section>
     </main>
   );
 }
+

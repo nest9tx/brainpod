@@ -1,9 +1,11 @@
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { ORIENTATION_POD_ID } from '@/lib/constants';
-import OrientationPod from './orientation-pod';
+import OrientationPod, { type SwarmTurn } from './orientation-pod';
 
 const FREE_TIER_DAILY_LIMIT = 5;
+// Every cycle writes exactly 1 Director turn + 4 agent turns, in that order.
+const TURNS_PER_CYCLE = 5;
 
 export default async function Home() {
   const supabase = createClient();
@@ -30,22 +32,32 @@ export default async function Home() {
       .select('summary_conclusion, turn_sequence, sender:profiles(display_name)')
       .eq('pod_id', ORIENTATION_POD_ID)
       .order('turn_sequence', { ascending: true })
-      .limit(50),
+      .limit(100),
   ]);
 
   const remainingPrompts = Math.max(FREE_TIER_DAILY_LIMIT - (usage?.prompt_count ?? 0), 0);
+
+  const flatHistory: SwarmTurn[] =
+    history?.map((turn) => ({
+      agent: (turn.sender as unknown as { display_name: string } | null)?.display_name ?? 'Director',
+      summary_conclusion: turn.summary_conclusion,
+    })) ?? [];
+
+  // Group into per-question cycles (newest first) so the timeline reads as a
+  // collapsible feed instead of one long flat list.
+  const initialCycles: { question: string; turns: SwarmTurn[] }[] = [];
+  for (let i = 0; i < flatHistory.length; i += TURNS_PER_CYCLE) {
+    const [director, ...agentTurns] = flatHistory.slice(i, i + TURNS_PER_CYCLE);
+    if (director) initialCycles.push({ question: director.summary_conclusion, turns: agentTurns });
+  }
+  initialCycles.reverse();
 
   return (
     <OrientationPod
       podName={pod?.name ?? 'Orientation'}
       podSummary={pod?.rolling_summary ?? ''}
       initialRemainingPrompts={remainingPrompts}
-      initialHistory={
-        history?.map((turn) => ({
-          agent: (turn.sender as unknown as { display_name: string } | null)?.display_name ?? 'Director',
-          summary_conclusion: turn.summary_conclusion,
-        })) ?? []
-      }
+      initialCycles={initialCycles}
     />
   );
 }

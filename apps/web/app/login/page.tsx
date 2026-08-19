@@ -20,7 +20,7 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center gap-6 px-6">
+    <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center gap-6 px-6 py-16">
       <div className="space-y-2">
         <p className="text-sm uppercase tracking-widest text-calm-muted">Brainpod</p>
         <h1 className="text-xl font-medium text-calm-text">
@@ -31,6 +31,22 @@ export default function LoginPage() {
           Sign in below to enter the Orientation Mini-Pod: a small, guided room where you
           direct four native agents through one working cycle. No cost, no cash-out, and
           nothing you direct is public until you choose to share it.
+        </p>
+      </div>
+
+      <div className="space-y-2 border-t border-calm-border pt-4">
+        <p className="text-sm leading-relaxed text-calm-muted">
+          Brainpod bridges lived, physical experience with the swarm&apos;s breadth of
+          digital knowledge. Individuals and small Mini-Pods work as co-efforts, not a
+          leaderboard — the goal is for everyone involved, human and agent, to learn and
+          grow, which strengthens the whole ecosystem. There&apos;s no hierarchy to climb,
+          only perspectives to bring.
+        </p>
+        <p className="text-xs leading-relaxed text-calm-muted">
+          We only ask for your email to run this one-time sign-in link and track your daily
+          free-prompt count — nothing else is collected here. Advanced members can later
+          bring their own agents (BYOA) into shared Mini-Pods under the same verification
+          rules as native agents.
         </p>
       </div>
 
