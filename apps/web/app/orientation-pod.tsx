@@ -12,19 +12,32 @@ type SwarmTurn = {
 };
 type Verdict = { verdict: string; score: number | null; pov_eligible: boolean };
 
+type OrientationPodProps = {
+  podName: string;
+  podSummary: string;
+  initialRemainingPrompts: number;
+  initialHistory: SwarmTurn[];
+};
+
 // Pre-account calmed landing (outline §5): mission first, one gentle call to action,
 // no raw message firehose. This is the Orientation Mini-Pod's entry surface.
-export default function OrientationPod() {
+export default function OrientationPod({
+  podName,
+  podSummary,
+  initialRemainingPrompts,
+  initialHistory,
+}: OrientationPodProps) {
   const [directorPrompt, setDirectorPrompt] = useState(SUGGESTED_PROMPT);
-  const [turns, setTurns] = useState<SwarmTurn[]>([]);
+  const [turns, setTurns] = useState<SwarmTurn[]>(initialHistory);
   const [verdict, setVerdict] = useState<Verdict | null>(null);
   const [expandedTurn, setExpandedTurn] = useState<number | null>(null);
   const [status, setStatus] = useState<'idle' | 'thinking' | 'error' | 'limit_reached'>('idle');
-  const [remainingPrompts, setRemainingPrompts] = useState(5);
+  const [remainingPrompts, setRemainingPrompts] = useState(initialRemainingPrompts);
 
   async function handleDirect() {
     if (!directorPrompt.trim() || remainingPrompts <= 0) return;
     setStatus('thinking');
+    setTurns((prev) => [...prev, { agent: 'You', summary_conclusion: directorPrompt }]);
 
     try {
       const res = await fetch('/api/orchestra', {
@@ -41,7 +54,7 @@ export default function OrientationPod() {
       if (!res.ok) throw new Error('orchestra_unavailable');
 
       const data = await res.json();
-      setTurns(data.turns ?? []);
+      setTurns((prev) => [...prev, ...(data.turns ?? [])]);
       setVerdict(data.verification ?? null);
       setRemainingPrompts((n) => Math.max(n - 1, 0));
       setStatus('idle');
@@ -54,16 +67,16 @@ export default function OrientationPod() {
     <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-8 px-6 py-16">
       <header className="space-y-3">
         <p className="text-sm uppercase tracking-widest text-calm-muted">
-          Brainpod · Orientation Mini-Pod
+          Brainpod · {podName} Mini-Pod
         </p>
         <h1 className="text-2xl font-medium text-calm-text">
           Human direction. Verified results. No cash-out, no gaming the ledger.
         </h1>
-        <p className="text-sm leading-relaxed text-calm-muted">
-          You are observing a controlled introduction to the swarm. Your account security,
-          and the content and ethics of anything you direct, are your responsibility. The
-          system paces the swarm, keeps sandboxes isolated, and never awards reputation
-          without verification.
+        {podSummary && <p className="text-sm leading-relaxed text-calm-muted">{podSummary}</p>}
+        <p className="text-xs text-calm-muted">
+          Every message below — yours and the swarm&apos;s — is saved to this pod, in order.
+          Nothing here is verified or worth Proof-of-Value until @Veritas says so at the end
+          of a cycle.
         </p>
       </header>
 
