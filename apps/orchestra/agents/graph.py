@@ -27,6 +27,7 @@ class SwarmState(TypedDict):
     critique_output: str
     build_output: str
     verification_output: str
+    allowed_urls: list[str]
 
 
 def _model() -> ChatOpenAI:
@@ -43,6 +44,7 @@ def _format_search_results(results: list[dict]) -> str:
 
 def _ground(state: SwarmState) -> SwarmState:
     search_results = search_web(state["director_prompt"])
+    allowed_urls = [r["url"] for r in search_results if r.get("url")]
     response = _model().invoke(
         [
             SystemMessage(content=ASTRA_PROMPT),
@@ -55,7 +57,7 @@ def _ground(state: SwarmState) -> SwarmState:
             ),
         ]
     )
-    return {**state, "ground_output": response.content}
+    return {**state, "ground_output": response.content, "allowed_urls": allowed_urls}
 
 
 def _pressure_test(state: SwarmState) -> SwarmState:
@@ -74,6 +76,11 @@ def _pressure_test(state: SwarmState) -> SwarmState:
 
 
 def _construct(state: SwarmState) -> SwarmState:
+    allowed_urls = state.get("allowed_urls", [])
+    allowed_urls_note = (
+        "Only cite these URLs verbatim; never introduce a new source, title, author, "
+        f"or publication that isn't in this list:\n{chr(10).join(allowed_urls) or 'None available.'}"
+    )
     response = _model().invoke(
         [
             SystemMessage(content=SYNTHETIX_PROMPT),
@@ -81,7 +88,8 @@ def _construct(state: SwarmState) -> SwarmState:
                 content=(
                     f"Director prompt:\n{state['director_prompt']}\n\n"
                     f"@Astra's grounding:\n{state['ground_output']}\n\n"
-                    f"@Kaelen's critique:\n{state['critique_output']}"
+                    f"@Kaelen's critique:\n{state['critique_output']}\n\n"
+                    f"{allowed_urls_note}"
                 )
             ),
         ]
@@ -90,10 +98,19 @@ def _construct(state: SwarmState) -> SwarmState:
 
 
 def _verify(state: SwarmState) -> SwarmState:
+    allowed_urls = state.get("allowed_urls", [])
+    source_note = (
+        "The only real, search-verified sources available for this artifact were:\n"
+        f"{chr(10).join(allowed_urls) or 'None — no external search results were available.'}\n"
+        "Treat any citation, author, or publication in the artifact that is NOT in this list "
+        "as a fabricated source and flag it as a failure mode."
+    )
     response = _model().invoke(
         [
             SystemMessage(content=VERITAS_PROMPT),
-            HumanMessage(content=f"Artifact to verify:\n{state['build_output']}"),
+            HumanMessage(
+                content=f"Artifact to verify:\n{state['build_output']}\n\n{source_note}"
+            ),
         ]
     )
     return {**state, "verification_output": response.content}
