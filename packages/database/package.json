@@ -1,0 +1,9 @@
+{
+  "name": "@brainpod/database",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "migrate": "supabase db push",
+    "diff": "supabase db diff"
+  }
+}
