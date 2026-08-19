@@ -10,6 +10,8 @@ services:
     envVars:
       - key: OPENAI_API_KEY
         sync: false
+      - key: TAVILY_API_KEY
+        sync: false
       - key: ORCHESTRA_MODEL
         value: gpt-4o-mini
       - key: ORCHESTRA_ALLOWED_ORIGIN

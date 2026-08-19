@@ -15,6 +15,7 @@ from langchain_openai import ChatOpenAI
 from langgraph.graph import END, StateGraph
 
 from .prompts import ASTRA_PROMPT, KAELEN_PROMPT, SYNTHETIX_PROMPT, VERITAS_PROMPT
+from .tools import search_web
 
 # Matches the last {...} block in @Veritas's reply, tolerating a ```json fence around it.
 _VERDICT_BLOCK_RE = re.compile(r"\{[^{}]*\}(?!.*\{[^{}]*\})", re.DOTALL)
@@ -34,9 +35,25 @@ def _model() -> ChatOpenAI:
     return ChatOpenAI(model=os.environ.get("ORCHESTRA_MODEL", "gpt-4o-mini"), temperature=0.3)
 
 
+def _format_search_results(results: list[dict]) -> str:
+    if not results:
+        return "No external search results are available for this request."
+    return "\n".join(f"- {r['title']} ({r['url']}): {r['content'][:400]}" for r in results)
+
+
 def _ground(state: SwarmState) -> SwarmState:
+    search_results = search_web(state["director_prompt"])
     response = _model().invoke(
-        [SystemMessage(content=ASTRA_PROMPT), HumanMessage(content=state["director_prompt"])]
+        [
+            SystemMessage(content=ASTRA_PROMPT),
+            HumanMessage(
+                content=(
+                    f"Director prompt:\n{state['director_prompt']}\n\n"
+                    "Live search results — cite only these URLs; do not invent others "
+                    f"or assert facts they don't support:\n{_format_search_results(search_results)}"
+                )
+            ),
+        ]
     )
     return {**state, "ground_output": response.content}
 
