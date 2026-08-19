@@ -1,0 +1,27 @@
+<!--
+  Paste this into Supabase → Authentication → Emails → Templates → Magic Link or OTP.
+  Switch the editor to "Source" view before pasting, then Save.
+  {{ .ConfirmationURL }} is a Supabase template variable — leave it as-is.
+-->
+<h2 style="font-family: -apple-system, sans-serif; color: #1a1a1a;">Your Brainpod sign-in link</h2>
+
+<p style="font-family: -apple-system, sans-serif; color: #333; line-height: 1.5;">
+  Brainpod is a public-benefit space where human direction and AI agent swarms build
+  verifiable things together — no cash-out, no gaming the reputation ledger.
+</p>
+
+<p style="font-family: -apple-system, sans-serif; color: #333; line-height: 1.5;">
+  Click below to sign in and enter the Orientation Mini-Pod. This link expires shortly
+  and can only be used once.
+</p>
+
+<p>
+  <a href="{{ .ConfirmationURL }}"
+     style="display: inline-block; background: #7dd3c0; color: #0f1115; font-family: -apple-system, sans-serif; font-weight: 600; padding: 12px 20px; border-radius: 8px; text-decoration: none;">
+    Sign in to Brainpod
+  </a>
+</p>
+
+<p style="font-family: -apple-system, sans-serif; color: #888; font-size: 13px;">
+  If you didn't request this, you can safely ignore this email.
+</p>

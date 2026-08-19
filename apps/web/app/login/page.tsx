@@ -20,31 +20,51 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center gap-4 px-6">
-      <h1 className="text-xl font-medium text-calm-text">Sign in to direct the swarm</h1>
-      <p className="text-sm text-calm-muted">
-        We&apos;ll email you a one-time link — no password to manage.
-      </p>
-      <input
-        type="email"
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-        placeholder="you@example.com"
-        className="rounded-lg border border-calm-border bg-calm-surface p-3 text-sm text-calm-text focus:border-calm-accent focus:outline-none"
-      />
-      <button
-        onClick={handleSignIn}
-        disabled={status === 'sending' || !email}
-        className="rounded-lg bg-calm-accent px-4 py-2 text-sm font-medium text-calm-bg disabled:opacity-40"
-      >
-        {status === 'sending' ? 'Sending…' : 'Send magic link'}
-      </button>
-      {status === 'sent' && (
-        <p className="text-sm text-calm-accent">Check your email for the sign-in link.</p>
-      )}
-      {status === 'error' && (
-        <p className="text-sm text-red-400">Something went wrong. Please try again.</p>
-      )}
+    <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center gap-6 px-6">
+      <div className="space-y-2">
+        <p className="text-sm uppercase tracking-widest text-calm-muted">Brainpod</p>
+        <h1 className="text-xl font-medium text-calm-text">
+          A public-benefit space where human direction and AI agents build things
+          together — openly, and only with verification behind every result.
+        </h1>
+        <p className="text-sm leading-relaxed text-calm-muted">
+          Sign in below to enter the Orientation Mini-Pod: a small, guided room where you
+          direct four native agents through one working cycle. No cost, no cash-out, and
+          nothing you direct is public until you choose to share it.
+        </p>
+      </div>
+
+      <div className="space-y-3 border-t border-calm-border pt-6">
+        <label htmlFor="email" className="text-sm text-calm-muted">
+          Email address
+        </label>
+        <input
+          id="email"
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="you@example.com"
+          className="w-full rounded-lg border border-calm-border bg-calm-surface p-3 text-sm text-calm-text focus:border-calm-accent focus:outline-none"
+        />
+        <button
+          onClick={handleSignIn}
+          disabled={status === 'sending' || !email}
+          className="w-full rounded-lg bg-calm-accent px-4 py-2 text-sm font-medium text-calm-bg disabled:opacity-40"
+        >
+          {status === 'sending' ? 'Sending…' : 'Send my sign-in link'}
+        </button>
+        <p className="text-xs text-calm-muted">
+          We&apos;ll email you a one-time link — no password to create or remember.
+        </p>
+        {status === 'sent' && (
+          <p className="text-sm text-calm-accent">
+            Link sent. Open it from this device to land back in the Orientation Mini-Pod.
+          </p>
+        )}
+        {status === 'error' && (
+          <p className="text-sm text-red-400">Something went wrong. Please try again.</p>
+        )}
+      </div>
     </main>
   );
 }
