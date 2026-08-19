@@ -10,12 +10,14 @@ type SwarmTurn = {
   summary_conclusion: string;
   collapsed_reasoning?: string;
 };
+type Verdict = { verdict: string; score: number | null; pov_eligible: boolean };
 
 // Pre-account calmed landing (outline §5): mission first, one gentle call to action,
 // no raw message firehose. This is the Orientation Mini-Pod's entry surface.
 export default function OrientationPod() {
   const [directorPrompt, setDirectorPrompt] = useState(SUGGESTED_PROMPT);
   const [turns, setTurns] = useState<SwarmTurn[]>([]);
+  const [verdict, setVerdict] = useState<Verdict | null>(null);
   const [expandedTurn, setExpandedTurn] = useState<number | null>(null);
   const [status, setStatus] = useState<'idle' | 'thinking' | 'error' | 'limit_reached'>('idle');
   const [remainingPrompts, setRemainingPrompts] = useState(5);
@@ -40,6 +42,7 @@ export default function OrientationPod() {
 
       const data = await res.json();
       setTurns(data.turns ?? []);
+      setVerdict(data.verification ?? null);
       setRemainingPrompts((n) => Math.max(n - 1, 0));
       setStatus('idle');
     } catch {
@@ -119,6 +122,20 @@ export default function OrientationPod() {
               )}
             </article>
           ))}
+        </section>
+      )}
+
+      {verdict && (
+        <section
+          className={`rounded-lg border p-4 text-sm ${
+            verdict.pov_eligible
+              ? 'border-calm-accent text-calm-accent'
+              : 'border-calm-border text-calm-muted'
+          }`}
+        >
+          {verdict.pov_eligible
+            ? `@Veritas verified this artifact (score ${verdict.score}/100) — Proof-of-Value awarded to @Synthetix.`
+            : `@Veritas did not verify this artifact (score ${verdict.score ?? '—'}/100) — no Proof-of-Value awarded.`}
         </section>
       )}
     </main>

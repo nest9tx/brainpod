@@ -36,5 +36,4 @@ def direct(request: DirectRequest):
             detail="orchestra_not_configured: OPENAI_API_KEY is not set yet",
         )
 
-    turns = run_swarm_cycle(request.director_prompt)
-    return {"turns": turns}
+    return run_swarm_cycle(request.director_prompt)

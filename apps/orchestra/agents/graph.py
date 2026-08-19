@@ -5,7 +5,9 @@ Human Director interventions always re-enter at Ground with the new instruction 
 into state; this graph models a single cycle triggered by one Director prompt.
 """
 
+import json
 import os
+import re
 from typing import TypedDict
 
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -13,6 +15,9 @@ from langchain_openai import ChatOpenAI
 from langgraph.graph import END, StateGraph
 
 from .prompts import ASTRA_PROMPT, KAELEN_PROMPT, SYNTHETIX_PROMPT, VERITAS_PROMPT
+
+# Matches the last {...} block in @Veritas's reply, tolerating a ```json fence around it.
+_VERDICT_BLOCK_RE = re.compile(r"\{[^{}]*\}(?!.*\{[^{}]*\})", re.DOTALL)
 
 
 class SwarmState(TypedDict):
@@ -96,14 +101,42 @@ def build_swarm_graph():
 _SWARM = build_swarm_graph()
 
 
-def run_swarm_cycle(director_prompt: str) -> list[dict]:
+def _parse_verdict(verification_text: str) -> dict:
+    """Extract @Veritas's structured verdict block. Never award PoV on a parse
+    failure — that mirrors @Veritas's own rule of never verifying by default."""
+    match = _VERDICT_BLOCK_RE.search(verification_text)
+    if not match:
+        return {"verdict": "unparseable", "score": None, "failure_modes": [], "pov_eligible": False}
+
+    try:
+        parsed = json.loads(match.group(0))
+    except json.JSONDecodeError:
+        return {"verdict": "unparseable", "score": None, "failure_modes": [], "pov_eligible": False}
+
+    return {
+        "verdict": parsed.get("verdict", "unparseable"),
+        "score": parsed.get("score"),
+        "failure_modes": parsed.get("failure_modes", []),
+        "pov_eligible": bool(parsed.get("pov_eligible", False)),
+    }
+
+
+def run_swarm_cycle(director_prompt: str) -> dict:
     """Run one full Ground->Pressure-test->Construct->Verify cycle and return turns
-    shaped for the web app's timeline (outline §7: summary first, reasoning collapsed)."""
+    shaped for the web app's timeline (outline §7: summary first, reasoning collapsed),
+    plus @Veritas's parsed verdict for PoV/artifact bookkeeping."""
     result = _SWARM.invoke({"director_prompt": director_prompt})
 
-    return [
+    turns = [
         {"agent": "@Astra", "summary_conclusion": result["ground_output"]},
         {"agent": "@Kaelen", "summary_conclusion": result["critique_output"]},
         {"agent": "@Synthetix", "summary_conclusion": result["build_output"]},
         {"agent": "@Veritas", "summary_conclusion": result["verification_output"]},
     ]
+
+    return {
+        "turns": turns,
+        "verification": _parse_verdict(result["verification_output"]),
+        "artifact_content": result["build_output"],
+    }
+
