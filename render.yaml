@@ -1,0 +1,16 @@
+# Render Blueprint: deploy from the repo root with "New +" -> "Blueprint".
+# https://render.com/docs/blueprint-spec
+services:
+  - type: web
+    name: brainpod-orchestra
+    runtime: docker
+    dockerfilePath: ./apps/orchestra/Dockerfile
+    dockerContext: ./apps/orchestra
+    plan: free
+    envVars:
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: ORCHESTRA_MODEL
+        value: gpt-4o-mini
+      - key: ORCHESTRA_ALLOWED_ORIGIN
+        value: https://brainpod-iota.vercel.app
