@@ -23,6 +23,12 @@ class DirectRequest(BaseModel):
     director_prompt: str
 
 
+@app.get("/")
+def root():
+    # Render's default health check hits "/"; without this it just logs harmless 404s.
+    return {"service": "brainpod-orchestra", "status": "ok"}
+
+
 @app.get("/health")
 def health():
     return {"status": "ok"}

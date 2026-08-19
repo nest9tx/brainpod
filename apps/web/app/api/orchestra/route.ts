@@ -28,6 +28,31 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'unauthenticated' }, { status: 401 });
   }
 
+  // Anti-gaming: block verbatim-repeat questions (yours or anyone else's) from ever
+  // reaching the swarm, so identical prompts can't be resubmitted for repeat PoV.
+  // Checked before the quota spend so a blocked duplicate doesn't cost a free prompt.
+  const agentIds = Object.values(AGENT_PROFILE_IDS);
+  const { data: priorDirectorTurns } = await supabase
+    .from('pod_turns')
+    .select('summary_conclusion')
+    .eq('pod_id', ORIENTATION_POD_ID)
+    .not('sender_id', 'in', `(${agentIds.join(',')})`);
+
+  const normalizedPrompt = directorPrompt.trim().toLowerCase();
+  const isDuplicate = priorDirectorTurns?.some(
+    (t) => t.summary_conclusion.trim().toLowerCase() === normalizedPrompt
+  );
+  if (isDuplicate) {
+    return NextResponse.json(
+      {
+        error: 'duplicate_question',
+        detail:
+          'This exact question has already been directed in this pod. Ask something new to contribute — repeating it earns no additional Proof-of-Value.',
+      },
+      { status: 409 }
+    );
+  }
+
   // SECURITY DEFINER function enforces the 5/day free-tier ceiling atomically.
   const { error: quotaError } = await supabase.rpc('increment_daily_usage');
   if (quotaError) {

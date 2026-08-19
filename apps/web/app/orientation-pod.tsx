@@ -46,7 +46,7 @@ export default function OrientationPod({
   initialRemainingPrompts,
   initialCycles,
 }: OrientationPodProps) {
-  const [directorPrompt, setDirectorPrompt] = useState(SUGGESTED_PROMPT);
+  const [directorPrompt, setDirectorPrompt] = useState('');
   const [cycles, setCycles] = useState<Cycle[]>(
     initialCycles.map((cycle) => ({
       ...cycle,
@@ -57,7 +57,9 @@ export default function OrientationPod({
   );
   const [expandedCycle, setExpandedCycle] = useState<number | null>(0);
   const [pendingQuestion, setPendingQuestion] = useState<string | null>(null);
-  const [status, setStatus] = useState<'idle' | 'thinking' | 'error' | 'limit_reached'>('idle');
+  const [status, setStatus] = useState<
+    'idle' | 'thinking' | 'error' | 'limit_reached' | 'duplicate'
+  >('idle');
   const [remainingPrompts, setRemainingPrompts] = useState(initialRemainingPrompts);
 
   async function handleDirect() {
@@ -78,6 +80,11 @@ export default function OrientationPod({
         setPendingQuestion(null);
         return;
       }
+      if (res.status === 409) {
+        setStatus('duplicate');
+        setPendingQuestion(null);
+        return;
+      }
       if (!res.ok) throw new Error('orchestra_unavailable');
 
       const data = await res.json();
@@ -87,6 +94,7 @@ export default function OrientationPod({
       ]);
       setExpandedCycle(0);
       setPendingQuestion(null);
+      setDirectorPrompt('');
       setRemainingPrompts((n) => Math.max(n - 1, 0));
       setStatus('idle');
     } catch {
@@ -124,12 +132,17 @@ export default function OrientationPod({
           id="director-prompt"
           className="w-full rounded-lg border border-calm-border bg-calm-surface p-3 text-sm text-calm-text focus:border-calm-accent focus:outline-none"
           rows={3}
+          placeholder={SUGGESTED_PROMPT}
           value={directorPrompt}
           onChange={(e) => setDirectorPrompt(e.target.value)}
         />
+        <p className="text-xs text-calm-muted">
+          Write your own question — repeating a question already asked in this pod won&apos;t
+          earn Proof-of-Value.
+        </p>
         <button
           onClick={handleDirect}
-          disabled={status === 'thinking' || remainingPrompts <= 0}
+          disabled={status === 'thinking' || remainingPrompts <= 0 || !directorPrompt.trim()}
           className="rounded-lg bg-calm-accent px-4 py-2 text-sm font-medium text-calm-bg disabled:opacity-40"
         >
           {status === 'thinking' ? 'Swarm is working…' : 'Send to swarm'}
@@ -143,6 +156,12 @@ export default function OrientationPod({
         {status === 'limit_reached' && (
           <p className="text-sm text-calm-muted">
             You&apos;ve used today&apos;s free Director prompts. They reset at 00:00 UTC.
+          </p>
+        )}
+        {status === 'duplicate' && (
+          <p className="text-sm text-calm-muted">
+            That exact question has already been directed in this pod — try a new angle or a
+            different question.
           </p>
         )}
       </section>
