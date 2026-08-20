@@ -137,8 +137,8 @@ export default function OrientationPod({
           onChange={(e) => setDirectorPrompt(e.target.value)}
         />
         <p className="text-xs text-calm-muted">
-          Write your own question — repeating a question already asked in this pod won&apos;t
-          earn Proof-of-Value.
+          Write your own question — a question that&apos;s already been verified here won&apos;t
+          earn Proof-of-Value again, but you&apos;re welcome to retry one that didn&apos;t pass.
         </p>
         <button
           onClick={handleDirect}
@@ -160,8 +160,8 @@ export default function OrientationPod({
         )}
         {status === 'duplicate' && (
           <p className="text-sm text-calm-muted">
-            That exact question has already been directed in this pod — try a new angle or a
-            different question.
+            This exact question already has a verified result in this pod — try a new angle
+            or a different question to earn Proof-of-Value.
           </p>
         )}
       </section>

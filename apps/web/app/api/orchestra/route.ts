@@ -28,26 +28,26 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'unauthenticated' }, { status: 401 });
   }
 
-  // Anti-gaming: block verbatim-repeat questions (yours or anyone else's) from ever
-  // reaching the swarm, so identical prompts can't be resubmitted for repeat PoV.
-  // Checked before the quota spend so a blocked duplicate doesn't cost a free prompt.
-  const agentIds = Object.values(AGENT_PROFILE_IDS);
-  const { data: priorDirectorTurns } = await supabase
-    .from('pod_turns')
-    .select('summary_conclusion')
-    .eq('pod_id', ORIENTATION_POD_ID)
-    .not('sender_id', 'in', `(${agentIds.join(',')})`);
-
+  // Anti-gaming: block only questions that have ALREADY been verified in this pod,
+  // so PoV can't be farmed twice for the same win. A question that previously failed
+  // verification can be retried freely — theories are allowed to evolve, not just win once.
+  // Checked before the quota spend so a blocked repeat doesn't cost a free prompt.
   const normalizedPrompt = directorPrompt.trim().toLowerCase();
-  const isDuplicate = priorDirectorTurns?.some(
-    (t) => t.summary_conclusion.trim().toLowerCase() === normalizedPrompt
+  const { data: priorVerifiedArtifacts } = await supabase
+    .from('artifacts')
+    .select('question')
+    .eq('pod_id', ORIENTATION_POD_ID)
+    .eq('is_verified', true);
+
+  const alreadyVerified = priorVerifiedArtifacts?.some(
+    (a) => a.question?.trim().toLowerCase() === normalizedPrompt
   );
-  if (isDuplicate) {
+  if (alreadyVerified) {
     return NextResponse.json(
       {
         error: 'duplicate_question',
         detail:
-          'This exact question has already been directed in this pod. Ask something new to contribute — repeating it earns no additional Proof-of-Value.',
+          'This exact question already has a verified artifact in this pod. Ask something new to contribute — re-running a won question earns no additional Proof-of-Value.',
       },
       { status: 409 }
     );
@@ -127,6 +127,7 @@ export async function POST(request: NextRequest) {
       creator_id: AGENT_PROFILE_IDS.synthetix,
       type: 'structured_analysis',
       content: artifactContent,
+      question: directorPrompt,
       veritas_score: verification.score,
       is_verified: verification.pov_eligible,
     })
