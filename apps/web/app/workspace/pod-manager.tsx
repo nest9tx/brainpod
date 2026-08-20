@@ -32,6 +32,20 @@ export default function PodManager({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
+  async function setPublished(id: string, publish: boolean) {
+    setBusy(true);
+    setError('');
+    const response = await fetch('/api/workspace/pods/publish', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, publish }),
+    });
+    const data = await response.json();
+    if (!response.ok) setError(data.detail ?? 'Could not update pod visibility.');
+    else setPods((current) => current.map((pod) => (pod.id === id ? data.pod : pod)));
+    setBusy(false);
+  }
+
   async function createPod() {
     if (!newName.trim()) return;
     setBusy(true);
@@ -110,6 +124,13 @@ export default function PodManager({
                   <span className="rounded-full border border-calm-border px-2 py-0.5 text-xs text-calm-muted">
                     {pod.status === 'private_isolated' ? 'Private' : pod.status}
                   </span>
+                  <button
+                    onClick={() => setPublished(pod.id, pod.status !== 'active')}
+                    disabled={busy}
+                    className="text-xs text-calm-muted underline"
+                  >
+                    {pod.status === 'active' ? 'Unpublish' : 'Publish summary'}
+                  </button>
                 </div>
               )}
               <p className="max-w-xl text-sm leading-relaxed text-calm-muted">{pod.rolling_summary}</p>

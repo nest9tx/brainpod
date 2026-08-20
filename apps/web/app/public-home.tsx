@@ -81,6 +81,9 @@ export default function PublicHome() {
         <Link href="/terms" className="text-sm text-calm-muted underline hover:text-calm-text">
           Terms of Service
         </Link>
+        <Link href="/explore" className="text-sm text-calm-muted underline hover:text-calm-text">
+          Explore released work
+        </Link>
       </div>
     </main>
   );
