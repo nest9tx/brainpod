@@ -23,6 +23,9 @@ export default async function ExplorePage() {
           These are public Mini-Pods whose owners chose to release their summaries for
           observation. Private pod histories remain private until their owners publish them.
         </p>
+        <Link href="/" className="inline-block text-sm text-calm-muted underline hover:text-calm-text">
+          Back to Brainpod home
+        </Link>
       </header>
 
       <section className="space-y-8" aria-label="Public Mini-Pods by category">
@@ -39,15 +42,19 @@ export default async function ExplorePage() {
               {categoryPods.length > 0 ? (
                 <div className="grid gap-3 sm:grid-cols-2">
                   {categoryPods.map((pod) => (
-                    <article key={pod.id} className="rounded-lg border border-calm-border bg-calm-surface p-4">
+                    <Link
+                      key={pod.id}
+                      href={`/explore/${pod.id}`}
+                      className="block rounded-lg border border-calm-border bg-calm-surface p-4 transition-colors hover:border-calm-accent"
+                    >
                       <h3 className="font-medium text-calm-text">{pod.name}</h3>
                       <p className="mt-2 text-sm leading-relaxed text-calm-muted">
                         {pod.rolling_summary}
                       </p>
                       <p className="mt-3 text-xs uppercase tracking-wide text-calm-accent">
-                        Released for observation
+                        View released summary
                       </p>
-                    </article>
+                    </Link>
                   ))}
                 </div>
               ) : (
