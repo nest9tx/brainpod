@@ -6,7 +6,7 @@ export default async function PublicStudyPage({ params }: { params: { artifactId
   const supabase = createClient();
   const { data: artifact } = await supabase
     .from('artifacts')
-    .select('id, question, public_summary, veritas_score, is_verified, mini_pods!inner(name, category_slug)')
+    .select('id, question, public_summary, public_summary_source, veritas_score, is_verified, mini_pods!inner(name, category_slug)')
     .eq('id', params.artifactId)
     .eq('public_release', true)
     .maybeSingle();
@@ -31,8 +31,14 @@ export default async function PublicStudyPage({ params }: { params: { artifactId
       <section className="space-y-4 rounded-lg border border-calm-border bg-calm-surface p-6">
         <h2 className="text-lg font-medium text-calm-text">Question</h2>
         <p className="text-sm leading-relaxed text-calm-muted">{artifact.question}</p>
-        <h2 className="pt-4 text-lg font-medium text-calm-text">Owner-released summary</h2>
+        <h2 className="pt-4 text-lg font-medium text-calm-text">
+          {artifact.public_summary_source === 'system_generated' ? 'System-generated summary' : 'Owner-authored summary'}
+        </h2>
         <p className="text-sm leading-relaxed text-calm-muted">{artifact.public_summary}</p>
+        <p className="text-xs leading-relaxed text-calm-muted">
+          This summary is separate from @Veritas&apos;s artifact verdict and must not be read as
+          independently verified. Future system-generated summaries will carry their own provenance.
+        </p>
         <p className={artifact.is_verified ? 'text-sm text-calm-accent' : 'text-sm text-calm-muted'}>
           {artifact.is_verified ? `Verified · ${artifact.veritas_score ?? '—'}/100` : 'Released for observation · not verified'}
         </p>

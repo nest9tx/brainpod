@@ -24,13 +24,21 @@ export default async function WorkspacePage() {
     .order('display_name', { ascending: true });
 
   const podIds = (pods ?? []).map((pod) => pod.id);
-  const { data: artifacts } = podIds.length
+  const { data: rawArtifacts } = podIds.length
     ? await supabase
         .from('artifacts')
-        .select('id, pod_id, question, public_release, public_summary, veritas_score, is_verified')
+        .select('id, pod_id, question, public_release, public_summary, public_summary_source, veritas_score, is_verified, created_at')
         .in('pod_id', podIds)
+        .not('question', 'is', null)
         .order('created_at', { ascending: false })
     : { data: [] };
+  const artifactByQuestion = new Map<string, (typeof rawArtifacts)[number]>();
+  for (const artifact of rawArtifacts ?? []) {
+    const key = artifact.question?.trim().toLowerCase() ?? artifact.id;
+    const existing = artifactByQuestion.get(key);
+    if (!existing || (!existing.is_verified && artifact.is_verified)) artifactByQuestion.set(key, artifact);
+  }
+  const artifacts = [...artifactByQuestion.values()];
 
   return (
     <main className="mx-auto flex min-h-screen max-w-3xl flex-col gap-8 px-6 py-16">

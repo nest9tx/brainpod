@@ -28,7 +28,11 @@ export async function PATCH(request: NextRequest) {
 
   const { data: updated, error } = await admin
     .from('artifacts')
-    .update({ public_release: publish, public_summary: publish ? summary : null })
+    .update({
+      public_release: publish,
+      public_summary: publish ? summary : null,
+      public_summary_source: 'owner_authored',
+    })
     .eq('id', id)
     .select('id, pod_id, question, public_release, public_summary, veritas_score, is_verified')
     .single();

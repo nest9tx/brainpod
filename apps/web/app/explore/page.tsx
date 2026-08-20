@@ -8,11 +8,18 @@ export default async function ExplorePage() {
     .select('slug, display_name, description')
     .order('display_name', { ascending: true });
 
-  const { data: studies } = await supabase
+  const { data: rawStudies } = await supabase
     .from('artifacts')
     .select('id, question, public_summary, veritas_score, is_verified, mini_pods!inner(id, name, category_slug)')
     .eq('public_release', true)
+    .not('question', 'is', null)
     .order('created_at', { ascending: false });
+  const studyByQuestion = new Map<string, (typeof rawStudies)[number]>();
+  for (const study of rawStudies ?? []) {
+    const key = study.question?.trim().toLowerCase() ?? study.id;
+    if (!studyByQuestion.has(key)) studyByQuestion.set(key, study);
+  }
+  const studies = [...studyByQuestion.values()];
 
   return (
     <main className="mx-auto flex min-h-screen max-w-4xl flex-col gap-10 px-6 py-16">
