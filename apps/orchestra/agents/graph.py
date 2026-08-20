@@ -42,6 +42,23 @@ def _format_search_results(results: list[dict]) -> str:
     return "\n".join(f"- {r['title']} ({r['url']}): {r['content'][:400]}" for r in results)
 
 
+_URL_RE = re.compile(r"https?://\S+")
+
+
+def _strip_unverified_citations(text: str, allowed_urls: list[str]) -> str:
+    """Redact any URL the model cited that isn't one of the real search results.
+    Prompt instructions alone don't reliably stop this, so this is enforced in code
+    rather than left to the model's compliance."""
+
+    def _replace(match: re.Match) -> str:
+        url = match.group(0).rstrip(").,;\"'")
+        if any(url.startswith(allowed) or allowed.startswith(url) for allowed in allowed_urls):
+            return match.group(0)
+        return "[unverifiable citation removed]"
+
+    return _URL_RE.sub(_replace, text)
+
+
 def _ground(state: SwarmState) -> SwarmState:
     search_results = search_web(state["director_prompt"])
     allowed_urls = [r["url"] for r in search_results if r.get("url")]
@@ -57,7 +74,8 @@ def _ground(state: SwarmState) -> SwarmState:
             ),
         ]
     )
-    return {**state, "ground_output": response.content, "allowed_urls": allowed_urls}
+    ground_output = _strip_unverified_citations(response.content, allowed_urls)
+    return {**state, "ground_output": ground_output, "allowed_urls": allowed_urls}
 
 
 def _pressure_test(state: SwarmState) -> SwarmState:
@@ -94,7 +112,8 @@ def _construct(state: SwarmState) -> SwarmState:
             ),
         ]
     )
-    return {**state, "build_output": response.content}
+    build_output = _strip_unverified_citations(response.content, allowed_urls)
+    return {**state, "build_output": build_output}
 
 
 def _verify(state: SwarmState) -> SwarmState:
