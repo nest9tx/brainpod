@@ -7,7 +7,7 @@ const FREE_TIER_DAILY_LIMIT = 5;
 // Every cycle writes exactly 1 Director turn + 4 agent turns, in that order.
 const TURNS_PER_CYCLE = 5;
 
-export default async function Home() {
+export default async function Home({ searchParams }: { searchParams: { pod?: string } }) {
   const supabase = createClient();
   const {
     data: { user },
@@ -28,6 +28,17 @@ export default async function Home() {
     .order('created_at', { ascending: true })
     .limit(1)
     .maybeSingle();
+
+  if (searchParams.pod) {
+    const { data: requestedPod } = await supabase
+      .from('mini_pods')
+      .select('id, name, rolling_summary')
+      .eq('id', searchParams.pod)
+      .eq('created_by', user.id)
+      .eq('status', 'private_isolated')
+      .maybeSingle();
+    if (requestedPod) pod = requestedPod;
+  }
 
   if (!pod) {
     const admin = createAdminClient();

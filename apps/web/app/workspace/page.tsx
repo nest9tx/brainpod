@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
+import PodManager from './pod-manager';
 
 export default async function WorkspacePage() {
   const supabase = createClient();
@@ -30,32 +31,7 @@ export default async function WorkspacePage() {
         <span className="shrink-0 text-xs text-calm-muted">{user.email}</span>
       </header>
 
-      <section className="space-y-3" aria-label="Your Mini-Pods">
-        {pods?.map((pod) => (
-          <article
-            key={pod.id}
-            className="flex items-center justify-between gap-5 rounded-lg border border-calm-border bg-calm-surface p-5"
-          >
-            <div className="space-y-2">
-              <div className="flex items-center gap-3">
-                <h2 className="text-base font-medium text-calm-text">{pod.name}</h2>
-                <span className="rounded-full border border-calm-accent px-2 py-0.5 text-xs text-calm-accent">
-                  {pod.status === 'private_isolated' ? 'Private' : pod.status}
-                </span>
-              </div>
-              <p className="max-w-xl text-sm leading-relaxed text-calm-muted">
-                {pod.rolling_summary}
-              </p>
-            </div>
-            <Link
-              href="/"
-              className="shrink-0 rounded-lg bg-calm-accent px-4 py-2 text-sm font-medium text-calm-bg"
-            >
-              Open pod
-            </Link>
-          </article>
-        ))}
-      </section>
+      <PodManager initialPods={pods ?? []} />
 
       <section className="space-y-3 border-t border-calm-border pt-8">
         <h2 className="text-lg font-medium text-calm-text">Workspace growth</h2>
