@@ -32,7 +32,7 @@ export default async function WorkspacePage() {
         .not('question', 'is', null)
         .order('created_at', { ascending: false })
     : { data: [] };
-  const artifactByQuestion = new Map<string, (typeof rawArtifacts)[number]>();
+  const artifactByQuestion = new Map<string, NonNullable<typeof rawArtifacts>[number]>();
   for (const artifact of rawArtifacts ?? []) {
     const key = artifact.question?.trim().toLowerCase() ?? artifact.id;
     const existing = artifactByQuestion.get(key);
