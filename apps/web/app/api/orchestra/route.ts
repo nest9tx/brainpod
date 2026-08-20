@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { AGENT_PROFILE_ID_BY_NAME, AGENT_PROFILE_IDS, ORIENTATION_POD_ID } from '@/lib/constants';
+import { AGENT_PROFILE_ID_BY_NAME, AGENT_PROFILE_IDS } from '@/lib/constants';
 
 type SwarmTurn = { agent: string; summary_conclusion: string };
 type Verdict = {
@@ -18,7 +18,7 @@ const ARTIFACT_VERIFIED_POV_DELTA = 10;
 // Auth + quota gate, then proxy from the browser to the orchestra (FastAPI/LangGraph)
 // swarm service, persisting both the Director's turn and each agent's turn to pod_turns.
 export async function POST(request: NextRequest) {
-  const { director_prompt: directorPrompt } = await request.json();
+  const { director_prompt: directorPrompt, pod_id: podId } = await request.json();
   const supabase = createClient();
 
   const {
@@ -26,6 +26,20 @@ export async function POST(request: NextRequest) {
   } = await supabase.auth.getUser();
   if (!user) {
     return NextResponse.json({ error: 'unauthenticated' }, { status: 401 });
+  }
+
+  if (!podId || typeof podId !== 'string') {
+    return NextResponse.json({ error: 'pod_required' }, { status: 400 });
+  }
+
+  const { data: podAccess } = await supabase
+    .from('private_pod_permissions')
+    .select('can_direct')
+    .eq('pod_id', podId)
+    .eq('profile_id', user.id)
+    .maybeSingle();
+  if (!podAccess?.can_direct) {
+    return NextResponse.json({ error: 'pod_access_denied' }, { status: 403 });
   }
 
   // Anti-gaming: block only questions that have ALREADY been verified in this pod,
@@ -36,7 +50,7 @@ export async function POST(request: NextRequest) {
   const { data: priorVerifiedArtifacts } = await supabase
     .from('artifacts')
     .select('question')
-    .eq('pod_id', ORIENTATION_POD_ID)
+    .eq('pod_id', podId)
     .eq('is_verified', true);
 
   const alreadyVerified = priorVerifiedArtifacts?.some(
@@ -62,13 +76,13 @@ export async function POST(request: NextRequest) {
   const { count } = await supabase
     .from('pod_turns')
     .select('id', { count: 'exact', head: true })
-    .eq('pod_id', ORIENTATION_POD_ID);
+    .eq('pod_id', podId);
   const nextSequence = (count ?? 0) + 1;
 
   // Director's own turn: RLS requires sender_id = auth.uid(), so the user's session
   // client (not the admin client) performs this insert.
   const { error: directorTurnError } = await supabase.from('pod_turns').insert({
-    pod_id: ORIENTATION_POD_ID,
+    pod_id: podId,
     sender_id: user.id,
     summary_conclusion: directorPrompt,
     turn_sequence: nextSequence,
@@ -102,7 +116,7 @@ export async function POST(request: NextRequest) {
     .from('pod_turns')
     .insert(
       turns.map((turn, i) => ({
-        pod_id: ORIENTATION_POD_ID,
+        pod_id: podId,
         sender_id: AGENT_PROFILE_ID_BY_NAME[turn.agent],
         summary_conclusion: turn.summary_conclusion,
         turn_sequence: nextSequence + i + 1,
@@ -122,7 +136,7 @@ export async function POST(request: NextRequest) {
   const { data: artifact, error: artifactError } = await admin
     .from('artifacts')
     .insert({
-      pod_id: ORIENTATION_POD_ID,
+      pod_id: podId,
       turn_id: constructTurn?.id,
       creator_id: AGENT_PROFILE_IDS.synthetix,
       type: 'structured_analysis',
@@ -144,7 +158,7 @@ export async function POST(request: NextRequest) {
   if (verification.pov_eligible) {
     await admin.from('pov_ledger').insert({
       profile_id: AGENT_PROFILE_IDS.synthetix,
-      pod_id: ORIENTATION_POD_ID,
+      pod_id: podId,
       artifact_id: artifact.id,
       delta: ARTIFACT_VERIFIED_POV_DELTA,
       reason_category: 'artifact_verified',

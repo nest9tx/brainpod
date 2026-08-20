@@ -15,6 +15,7 @@ type Verdict = { verdict: string; score: number | null; pov_eligible: boolean };
 type Cycle = { question: string; turns: SwarmTurn[]; verdict?: Verdict | null };
 
 type OrientationPodProps = {
+  podId: string;
   podName: string;
   podSummary: string;
   initialRemainingPrompts: number;
@@ -43,6 +44,7 @@ function parseVerdictFromVeritasText(text: string | undefined): Verdict | null {
 // Pre-account calmed landing (outline §5): mission first, one gentle call to action,
 // no raw message firehose. This is the Orientation Mini-Pod's entry surface.
 export default function OrientationPod({
+  podId,
   podName,
   podSummary,
   initialRemainingPrompts,
@@ -74,7 +76,7 @@ export default function OrientationPod({
       const res = await fetch('/api/orchestra', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ director_prompt: directorPrompt }),
+        body: JSON.stringify({ director_prompt: directorPrompt, pod_id: podId }),
       });
 
       if (res.status === 429) {

@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
-import { ORIENTATION_POD_ID } from '@/lib/constants';
+import { createAdminClient } from '@/lib/supabase/admin';
 import OrientationPod, { type SwarmTurn } from './orientation-pod';
 import PublicHome from './public-home';
 
@@ -19,18 +19,53 @@ export default async function Home() {
 
   const today = new Date().toISOString().slice(0, 10);
 
-  const [{ data: usage }, { data: pod }, { data: history }] = await Promise.all([
+  let { data: pod } = await supabase
+    .from('mini_pods')
+    .select('id, name, rolling_summary')
+    .eq('created_by', user.id)
+    .eq('category_slug', 'orientation')
+    .eq('status', 'private_isolated')
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  if (!pod) {
+    const admin = createAdminClient();
+    const { data: newPod, error: podError } = await admin
+      .from('mini_pods')
+      .insert({
+        name: 'My Orientation Pod',
+        category_slug: 'orientation',
+        status: 'private_isolated',
+        created_by: user.id,
+      })
+      .select('id, name, rolling_summary')
+      .single();
+
+    if (podError || !newPod) {
+      throw new Error(`Could not create your private Orientation Pod: ${podError?.message ?? 'unknown error'}`);
+    }
+
+    const { error: permissionError } = await admin.from('private_pod_permissions').insert({
+      pod_id: newPod.id,
+      profile_id: user.id,
+      can_direct: true,
+    });
+    if (permissionError) throw new Error(`Could not grant pod access: ${permissionError.message}`);
+    pod = newPod;
+  }
+
+  const [{ data: usage }, { data: history }] = await Promise.all([
     supabase
       .from('daily_usage_logs')
       .select('prompt_count')
       .eq('profile_id', user.id)
       .eq('usage_date', today)
       .maybeSingle(),
-    supabase.from('mini_pods').select('name, rolling_summary').eq('id', ORIENTATION_POD_ID).single(),
     supabase
       .from('pod_turns')
       .select('summary_conclusion, turn_sequence, sender:profiles(display_name)')
-      .eq('pod_id', ORIENTATION_POD_ID)
+      .eq('pod_id', pod.id)
       .order('turn_sequence', { ascending: true })
       .limit(100),
   ]);
@@ -54,8 +89,9 @@ export default async function Home() {
 
   return (
     <OrientationPod
-      podName={pod?.name ?? 'Orientation'}
-      podSummary={pod?.rolling_summary ?? ''}
+      podId={pod.id}
+      podName={pod.name}
+      podSummary={pod.rolling_summary}
       initialRemainingPrompts={remainingPrompts}
       initialCycles={initialCycles}
       userEmail={user.email ?? ''}
