@@ -29,6 +29,7 @@ export default function PodManager({
   const [newCategory, setNewCategory] = useState(categories[0]?.slug ?? '');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
+  const [editingCategory, setEditingCategory] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
@@ -71,7 +72,7 @@ export default function PodManager({
     const response = await fetch('/api/workspace/pods', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, name: editingName }),
+      body: JSON.stringify({ id, name: editingName, category_slug: editingCategory }),
     });
     const data = await response.json();
     if (!response.ok) setError(data.detail ?? 'Could not rename the pod.');
@@ -99,6 +100,17 @@ export default function PodManager({
                     className="rounded border border-calm-border bg-calm-bg px-2 py-1 text-sm text-calm-text"
                     maxLength={100}
                   />
+                  <select
+                    value={editingCategory}
+                    onChange={(event) => setEditingCategory(event.target.value)}
+                    className="rounded border border-calm-border bg-calm-bg px-2 py-1 text-sm text-calm-text"
+                  >
+                    {categories.map((category) => (
+                      <option key={category.slug} value={category.slug}>
+                        {category.display_name}
+                      </option>
+                    ))}
+                  </select>
                   <button onClick={() => renamePod(pod.id)} disabled={busy} className="text-xs text-calm-accent underline">
                     Save
                   </button>
@@ -113,6 +125,7 @@ export default function PodManager({
                     onClick={() => {
                       setEditingId(pod.id);
                       setEditingName(pod.name);
+                      setEditingCategory(pod.category_slug);
                     }}
                     className="text-xs text-calm-muted underline"
                   >

@@ -21,6 +21,9 @@ export default function PublicHome() {
           was asked, what the agents contributed, what sources were used, and what @Veritas
           could or could not verify.
         </p>
+        <Link href="/explore" className="inline-block text-sm text-calm-muted underline hover:text-calm-text">
+          Explore released work before signing in
+        </Link>
       </header>
 
       <section className="grid gap-4 sm:grid-cols-3" aria-label="How Brainpod works">

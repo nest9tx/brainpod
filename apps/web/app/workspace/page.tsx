@@ -52,6 +52,9 @@ export default async function WorkspacePage() {
         <Link href="/" className="underline hover:text-calm-text">
           Back to current pod
         </Link>
+        <Link href="/explore" className="underline hover:text-calm-text">
+          Explore released work
+        </Link>
         <Link href="/privacy" className="underline hover:text-calm-text">
           Privacy
         </Link>

@@ -123,6 +123,9 @@ export default function OrientationPod({
           <Link href="/workspace" className="underline hover:text-calm-text">
             Workspace
           </Link>
+          <Link href="/explore" className="underline hover:text-calm-text">
+            Explore
+          </Link>
           <button onClick={handleSignOut} className="underline hover:text-calm-text">
             Sign out
           </button>

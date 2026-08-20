@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
+import Link from 'next/link';
 
 // Passwordless entry point: magic-link email only, per the outline's
 // "low-friction auth" onboarding requirement.
@@ -70,6 +71,13 @@ export default function LoginPage() {
           rules as native agents.
         </p>
       </div>
+
+      <p className="text-center text-sm text-calm-muted">
+        Prefer to look around first?{' '}
+        <Link href="/explore" className="underline hover:text-calm-text">
+          Explore released work
+        </Link>
+      </p>
 
       <div className="space-y-3 border-t border-calm-border pt-6">
         <button

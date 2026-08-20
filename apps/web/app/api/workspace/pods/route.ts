@@ -62,16 +62,23 @@ export async function PATCH(request: NextRequest) {
   } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: 'unauthenticated' }, { status: 401 });
 
-  const { id, name } = await request.json();
+  const { id, name, category_slug: categorySlug } = await request.json();
   const trimmedName = typeof name === 'string' ? name.trim() : '';
   if (typeof id !== 'string' || !trimmedName || trimmedName.length > 100) {
     return NextResponse.json({ error: 'invalid_pod_update' }, { status: 400 });
   }
 
+  const { data: category } = await supabase
+    .from('main_categories')
+    .select('slug')
+    .eq('slug', categorySlug)
+    .maybeSingle();
+  if (!category) return NextResponse.json({ error: 'invalid_category' }, { status: 400 });
+
   const admin = createAdminClient();
   const { data: pod, error } = await admin
     .from('mini_pods')
-    .update({ name: trimmedName })
+    .update({ name: trimmedName, category_slug: category.slug })
     .eq('id', id)
     .eq('created_by', user.id)
     .select('id, name, category_slug, status, rolling_summary, created_at')
