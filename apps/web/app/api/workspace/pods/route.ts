@@ -9,10 +9,19 @@ export async function POST(request: NextRequest) {
   } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: 'unauthenticated' }, { status: 401 });
 
-  const { name } = await request.json();
+  const { name, category_slug: categorySlug } = await request.json();
   const trimmedName = typeof name === 'string' ? name.trim() : '';
   if (!trimmedName || trimmedName.length > 100) {
     return NextResponse.json({ error: 'invalid_pod_name' }, { status: 400 });
+  }
+
+  const { data: category } = await supabase
+    .from('main_categories')
+    .select('slug')
+    .eq('slug', categorySlug)
+    .maybeSingle();
+  if (!category) {
+    return NextResponse.json({ error: 'invalid_category' }, { status: 400 });
   }
 
   const admin = createAdminClient();
@@ -20,7 +29,7 @@ export async function POST(request: NextRequest) {
     .from('mini_pods')
     .insert({
       name: trimmedName,
-      category_slug: 'orientation',
+      category_slug: category.slug,
       status: 'private_isolated',
       created_by: user.id,
     })

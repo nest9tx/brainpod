@@ -11,9 +11,22 @@ type Pod = {
   created_at: string;
 };
 
-export default function PodManager({ initialPods }: { initialPods: Pod[] }) {
+type Category = {
+  slug: string;
+  display_name: string;
+  description: string | null;
+};
+
+export default function PodManager({
+  initialPods,
+  categories,
+}: {
+  initialPods: Pod[];
+  categories: Category[];
+}) {
   const [pods, setPods] = useState(initialPods);
   const [newName, setNewName] = useState('');
+  const [newCategory, setNewCategory] = useState(categories[0]?.slug ?? '');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
   const [busy, setBusy] = useState(false);
@@ -26,7 +39,7 @@ export default function PodManager({ initialPods }: { initialPods: Pod[] }) {
     const response = await fetch('/api/workspace/pods', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: newName }),
+      body: JSON.stringify({ name: newName, category_slug: newCategory }),
     });
     const data = await response.json();
     if (!response.ok) setError(data.detail ?? 'Could not create the pod.');
@@ -92,6 +105,9 @@ export default function PodManager({ initialPods }: { initialPods: Pod[] }) {
                     Rename
                   </button>
                   <span className="rounded-full border border-calm-accent px-2 py-0.5 text-xs text-calm-accent">
+                    {categories.find((category) => category.slug === pod.category_slug)?.display_name ?? pod.category_slug}
+                  </span>
+                  <span className="rounded-full border border-calm-border px-2 py-0.5 text-xs text-calm-muted">
                     {pod.status === 'private_isolated' ? 'Private' : pod.status}
                   </span>
                 </div>
@@ -118,6 +134,17 @@ export default function PodManager({ initialPods }: { initialPods: Pod[] }) {
             maxLength={100}
             className="min-w-0 flex-1 rounded-lg border border-calm-border bg-calm-surface px-3 py-2 text-sm text-calm-text"
           />
+          <select
+            value={newCategory}
+            onChange={(event) => setNewCategory(event.target.value)}
+            className="rounded-lg border border-calm-border bg-calm-surface px-3 py-2 text-sm text-calm-text"
+          >
+            {categories.map((category) => (
+              <option key={category.slug} value={category.slug}>
+                {category.display_name}
+              </option>
+            ))}
+          </select>
           <button onClick={createPod} disabled={busy || !newName.trim()} className="rounded-lg bg-calm-accent px-4 py-2 text-sm font-medium text-calm-bg disabled:opacity-40">
             Create pod
           </button>
