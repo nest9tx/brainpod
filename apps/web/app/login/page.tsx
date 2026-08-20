@@ -118,6 +118,18 @@ export default function LoginPage() {
           <p className="text-sm text-red-400">{errorMessage || 'Something went wrong. Please try again.'}</p>
         )}
       </div>
+
+      <p className="text-center text-xs text-calm-muted">
+        By continuing you agree to our{' '}
+        <a href="/terms" className="underline hover:text-calm-text">
+          Terms
+        </a>{' '}
+        and{' '}
+        <a href="/privacy" className="underline hover:text-calm-text">
+          Privacy Policy
+        </a>
+        .
+      </p>
     </main>
   );
 }
