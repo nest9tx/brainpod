@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
+import Link from 'next/link';
 
 const SUGGESTED_PROMPT =
   'Help me understand how a Ground → Pressure-test → Construct → Verify cycle would tackle a small, well-defined problem.';
@@ -118,9 +119,14 @@ export default function OrientationPod({
     <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-8 px-6 py-16">
       <div className="flex items-center justify-between text-xs text-calm-muted">
         <span>Signed in as {userEmail}</span>
-        <button onClick={handleSignOut} className="underline hover:text-calm-text">
-          Sign out
-        </button>
+        <div className="flex items-center gap-4">
+          <Link href="/workspace" className="underline hover:text-calm-text">
+            Workspace
+          </Link>
+          <button onClick={handleSignOut} className="underline hover:text-calm-text">
+            Sign out
+          </button>
+        </div>
       </div>
 
       <header className="space-y-3">
