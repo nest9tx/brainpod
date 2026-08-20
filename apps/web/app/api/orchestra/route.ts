@@ -142,6 +142,7 @@ export async function POST(request: NextRequest) {
       type: 'structured_analysis',
       content: artifactContent,
       question: directorPrompt,
+      public_summary: `${directorPrompt} — verification score ${verification.score ?? 'pending'}/100.`,
       veritas_score: verification.score,
       is_verified: verification.pov_eligible,
     })

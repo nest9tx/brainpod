@@ -1,6 +1,5 @@
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/server';
-import { ORIENTATION_POD_ID } from '@/lib/constants';
 
 export default async function ExplorePage() {
   const supabase = createClient();
@@ -9,11 +8,10 @@ export default async function ExplorePage() {
     .select('slug, display_name, description')
     .order('display_name', { ascending: true });
 
-  const { data: pods } = await supabase
-    .from('mini_pods')
-    .select('id, name, category_slug, rolling_summary, created_at')
-    .eq('status', 'active')
-    .neq('id', ORIENTATION_POD_ID)
+  const { data: studies } = await supabase
+    .from('artifacts')
+    .select('id, question, public_summary, veritas_score, is_verified, mini_pods!inner(id, name, category_slug)')
+    .eq('public_release', true)
     .order('created_at', { ascending: false });
 
   return (
@@ -32,7 +30,10 @@ export default async function ExplorePage() {
 
       <section className="space-y-8" aria-label="Public Mini-Pods by category">
         {categories?.map((category) => {
-          const categoryPods = pods?.filter((pod) => pod.category_slug === category.slug) ?? [];
+          const categoryStudies = studies?.filter((study) => {
+            const pod = study.mini_pods as unknown as { category_slug: string };
+            return pod.category_slug === category.slug;
+          }) ?? [];
           return (
             <section key={category.slug} className="space-y-3">
               <div>
@@ -41,23 +42,26 @@ export default async function ExplorePage() {
                   <p className="mt-1 text-sm text-calm-muted">{category.description}</p>
                 )}
               </div>
-              {categoryPods.length > 0 ? (
+              {categoryStudies.length > 0 ? (
                 <div className="grid gap-3 sm:grid-cols-2">
-                  {categoryPods.map((pod) => (
+                  {categoryStudies.map((study) => {
+                    const pod = study.mini_pods as unknown as { name: string };
+                    return (
                     <Link
-                      key={pod.id}
-                      href={`/explore/${pod.id}`}
+                      key={study.id}
+                      href={`/explore/study/${study.id}`}
                       className="block rounded-lg border border-calm-border bg-calm-surface p-4 transition-colors hover:border-calm-accent"
                     >
-                      <h3 className="font-medium text-calm-text">{pod.name}</h3>
+                      <h3 className="font-medium text-calm-text">{study.question ?? 'Released study'}</h3>
                       <p className="mt-2 text-sm leading-relaxed text-calm-muted">
-                        {pod.rolling_summary}
+                        {study.public_summary}
                       </p>
                       <p className="mt-3 text-xs uppercase tracking-wide text-calm-accent">
-                        View released summary
+                        View study · {pod.name} · {study.is_verified ? `${study.veritas_score ?? '—'}/100` : 'observation'}
                       </p>
                     </Link>
-                  ))}
+                    );
+                  })}
                 </div>
               ) : (
                 <p className="text-sm text-calm-muted">No released pods in this category yet.</p>

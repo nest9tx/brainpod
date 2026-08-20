@@ -23,6 +23,15 @@ export default async function WorkspacePage() {
     .select('slug, display_name, description')
     .order('display_name', { ascending: true });
 
+  const podIds = (pods ?? []).map((pod) => pod.id);
+  const { data: artifacts } = podIds.length
+    ? await supabase
+        .from('artifacts')
+        .select('id, pod_id, question, public_release, public_summary, veritas_score, is_verified')
+        .in('pod_id', podIds)
+        .order('created_at', { ascending: false })
+    : { data: [] };
+
   return (
     <main className="mx-auto flex min-h-screen max-w-3xl flex-col gap-8 px-6 py-16">
       <header className="flex items-start justify-between gap-6">
@@ -37,7 +46,7 @@ export default async function WorkspacePage() {
         <span className="shrink-0 text-xs text-calm-muted">{user.email}</span>
       </header>
 
-      <PodManager initialPods={pods ?? []} categories={categories ?? []} />
+      <PodManager initialPods={pods ?? []} categories={categories ?? []} initialArtifacts={artifacts ?? []} />
 
       <section className="space-y-3 border-t border-calm-border pt-8">
         <h2 className="text-lg font-medium text-calm-text">Workspace growth</h2>

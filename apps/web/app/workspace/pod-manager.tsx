@@ -16,15 +16,27 @@ type Category = {
   display_name: string;
   description: string | null;
 };
+type Artifact = {
+  id: string;
+  pod_id: string;
+  question: string | null;
+  public_release: boolean;
+  public_summary: string | null;
+  veritas_score: number | null;
+  is_verified: boolean;
+};
 
 export default function PodManager({
   initialPods,
   categories,
+  initialArtifacts,
 }: {
   initialPods: Pod[];
   categories: Category[];
+  initialArtifacts: Artifact[];
 }) {
   const [pods, setPods] = useState(initialPods);
+  const [artifacts, setArtifacts] = useState(initialArtifacts);
   const [newName, setNewName] = useState('');
   const [newCategory, setNewCategory] = useState(categories[0]?.slug ?? '');
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -33,19 +45,6 @@ export default function PodManager({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
-  async function setPublished(id: string, publish: boolean) {
-    setBusy(true);
-    setError('');
-    const response = await fetch('/api/workspace/pods/publish', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, publish }),
-    });
-    const data = await response.json();
-    if (!response.ok) setError(data.detail ?? 'Could not update pod visibility.');
-    else setPods((current) => current.map((pod) => (pod.id === id ? data.pod : pod)));
-    setBusy(false);
-  }
 
   async function createPod() {
     if (!newName.trim()) return;
@@ -80,6 +79,22 @@ export default function PodManager({
       setPods((current) => current.map((pod) => (pod.id === id ? data.pod : pod)));
       setEditingId(null);
     }
+    setBusy(false);
+  }
+
+  async function setArtifactPublished(artifact: Artifact) {
+    const publish = !artifact.public_release;
+    const summary = artifact.public_summary ?? artifact.question ?? '';
+    setBusy(true);
+    setError('');
+    const response = await fetch('/api/workspace/artifacts/publish', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: artifact.id, publish, public_summary: summary }),
+    });
+    const data = await response.json();
+    if (!response.ok) setError(data.detail ?? data.error ?? 'Could not update study visibility.');
+    else setArtifacts((current) => current.map((item) => item.id === artifact.id ? data.artifact : item));
     setBusy(false);
   }
 
@@ -137,13 +152,6 @@ export default function PodManager({
                   <span className="rounded-full border border-calm-border px-2 py-0.5 text-xs text-calm-muted">
                     {pod.status === 'private_isolated' ? 'Private' : pod.status}
                   </span>
-                  <button
-                    onClick={() => setPublished(pod.id, pod.status !== 'active')}
-                    disabled={busy}
-                    className="text-xs text-calm-muted underline"
-                  >
-                    {pod.status === 'active' ? 'Unpublish' : 'Publish summary'}
-                  </button>
                 </div>
               )}
               <p className="max-w-xl text-sm leading-relaxed text-calm-muted">{pod.rolling_summary}</p>
@@ -154,6 +162,27 @@ export default function PodManager({
           </article>
         ))}
       </section>
+
+      {artifacts.length > 0 && (
+        <section className="space-y-3 border-t border-calm-border pt-8">
+          <h2 className="text-lg font-medium text-calm-text">Studies in your pods</h2>
+          {artifacts.map((artifact) => (
+            <article key={artifact.id} className="rounded-lg border border-calm-border bg-calm-surface p-4">
+              <p className="text-sm text-calm-text">{artifact.question ?? 'Untitled study'}</p>
+              <p className="mt-1 text-xs text-calm-muted">
+                {artifact.is_verified ? `Verified · ${artifact.veritas_score ?? '—'}/100` : 'Not verified'}
+              </p>
+              <button
+                onClick={() => setArtifactPublished(artifact)}
+                disabled={busy}
+                className="mt-2 text-xs text-calm-muted underline"
+              >
+                {artifact.public_release ? 'Unpublish study summary' : 'Publish study summary'}
+              </button>
+            </article>
+          ))}
+        </section>
+      )}
 
       <section className="space-y-3 border-t border-calm-border pt-8">
         <h2 className="text-lg font-medium text-calm-text">Create a private pod</h2>
