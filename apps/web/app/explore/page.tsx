@@ -14,7 +14,7 @@ export default async function ExplorePage() {
     .eq('public_release', true)
     .not('question', 'is', null)
     .order('created_at', { ascending: false });
-  const studyByQuestion = new Map<string, (typeof rawStudies)[number]>();
+  const studyByQuestion = new Map<string, NonNullable<typeof rawStudies>[number]>();
   for (const study of rawStudies ?? []) {
     const key = study.question?.trim().toLowerCase() ?? study.id;
     if (!studyByQuestion.has(key)) studyByQuestion.set(key, study);
