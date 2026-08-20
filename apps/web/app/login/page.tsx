@@ -8,6 +8,7 @@ import { createClient } from '@/lib/supabase/client';
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [status, setStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
+  const [errorMessage, setErrorMessage] = useState('');
 
   async function handleSignIn() {
     setStatus('sending');
@@ -16,7 +17,13 @@ export default function LoginPage() {
       email,
       options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
     });
-    setStatus(error ? 'error' : 'sent');
+    if (error) {
+      console.error('signInWithOtp failed:', error);
+      setErrorMessage(error.message);
+      setStatus('error');
+    } else {
+      setStatus('sent');
+    }
   }
 
   return (
@@ -78,7 +85,7 @@ export default function LoginPage() {
           </p>
         )}
         {status === 'error' && (
-          <p className="text-sm text-red-400">Something went wrong. Please try again.</p>
+          <p className="text-sm text-red-400">{errorMessage || 'Something went wrong. Please try again.'}</p>
         )}
       </div>
     </main>
