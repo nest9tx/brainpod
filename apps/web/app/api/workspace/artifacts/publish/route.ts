@@ -22,7 +22,7 @@ export async function PATCH(request: NextRequest) {
   if (!artifact) return NextResponse.json({ error: 'artifact_not_owned' }, { status: 403 });
 
   const summary = typeof public_summary === 'string' ? public_summary.trim() : '';
-  if (publish && !summary) {
+  if (publish && (!summary || summary === (await getArtifactQuestion(admin, id)))) {
     return NextResponse.json({ error: 'summary_required' }, { status: 400 });
   }
 
@@ -36,4 +36,9 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ error: 'artifact_release_failed', detail: error?.message }, { status: 500 });
   }
   return NextResponse.json({ artifact: updated });
+}
+
+async function getArtifactQuestion(admin: ReturnType<typeof createAdminClient>, id: string) {
+  const { data } = await admin.from('artifacts').select('question').eq('id', id).maybeSingle();
+  return data?.question?.trim() ?? '';
 }

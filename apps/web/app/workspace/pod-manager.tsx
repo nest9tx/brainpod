@@ -37,6 +37,9 @@ export default function PodManager({
 }) {
   const [pods, setPods] = useState(initialPods);
   const [artifacts, setArtifacts] = useState(initialArtifacts);
+  const [summaryDrafts, setSummaryDrafts] = useState<Record<string, string>>(
+    Object.fromEntries(initialArtifacts.map((artifact) => [artifact.id, artifact.public_summary ?? '']))
+  );
   const [newName, setNewName] = useState('');
   const [newCategory, setNewCategory] = useState(categories[0]?.slug ?? '');
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -84,7 +87,7 @@ export default function PodManager({
 
   async function setArtifactPublished(artifact: Artifact) {
     const publish = !artifact.public_release;
-    const summary = artifact.public_summary ?? artifact.question ?? '';
+    const summary = summaryDrafts[artifact.id]?.trim() ?? '';
     setBusy(true);
     setError('');
     const response = await fetch('/api/workspace/artifacts/publish', {
@@ -172,6 +175,15 @@ export default function PodManager({
               <p className="mt-1 text-xs text-calm-muted">
                 {artifact.is_verified ? `Verified · ${artifact.veritas_score ?? '—'}/100` : 'Not verified'}
               </p>
+              <textarea
+                value={summaryDrafts[artifact.id] ?? ''}
+                onChange={(event) =>
+                  setSummaryDrafts((current) => ({ ...current, [artifact.id]: event.target.value }))
+                }
+                placeholder="Write a distinct public summary of this study"
+                rows={2}
+                className="mt-3 w-full rounded border border-calm-border bg-calm-bg p-2 text-sm text-calm-text"
+              />
               <button
                 onClick={() => setArtifactPublished(artifact)}
                 disabled={busy}
