@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { createClient } from '@/lib/supabase/client';
 
 const SUGGESTED_PROMPT =
   'Help me understand how a Ground → Pressure-test → Construct → Verify cycle would tackle a small, well-defined problem.';
@@ -18,6 +19,7 @@ type OrientationPodProps = {
   podSummary: string;
   initialRemainingPrompts: number;
   initialCycles: { question: string; turns: SwarmTurn[] }[];
+  userEmail: string;
 };
 
 // Extracts @Veritas's trailing {...} verdict block for the collapsed-card badge.
@@ -45,6 +47,7 @@ export default function OrientationPod({
   podSummary,
   initialRemainingPrompts,
   initialCycles,
+  userEmail,
 }: OrientationPodProps) {
   const [directorPrompt, setDirectorPrompt] = useState('');
   const [cycles, setCycles] = useState<Cycle[]>(
@@ -103,8 +106,21 @@ export default function OrientationPod({
     }
   }
 
+  async function handleSignOut() {
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    window.location.href = '/login';
+  }
+
   return (
     <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-8 px-6 py-16">
+      <div className="flex items-center justify-between text-xs text-calm-muted">
+        <span>Signed in as {userEmail}</span>
+        <button onClick={handleSignOut} className="underline hover:text-calm-text">
+          Sign out
+        </button>
+      </div>
+
       <header className="space-y-3">
         <p className="text-sm uppercase tracking-widest text-calm-muted">
           Brainpod · {podName} Mini-Pod

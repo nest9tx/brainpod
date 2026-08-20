@@ -99,7 +99,10 @@ def _construct(state: SwarmState) -> SwarmState:
         "Only cite these URLs verbatim; never introduce a new source, title, author, "
         "or publication that isn't in this list. Do not gesture at unlinked authority "
         "either — no 'based on official records/logs/transcripts' unless one of the URLs "
-        f"below is actually that record:\n{chr(10).join(allowed_urls) or 'None available.'}"
+        "below is actually that record. Attach the citation immediately after each "
+        "specific factual claim it supports (e.g. 'Landed July 20, 1969 [Source](url).'), "
+        "rather than only listing sources at the end — @Veritas requires unambiguous "
+        f"per-claim attribution, not a bibliography:\n{chr(10).join(allowed_urls) or 'None available.'}"
     )
     response = _model().invoke(
         [

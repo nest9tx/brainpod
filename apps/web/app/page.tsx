@@ -58,6 +58,7 @@ export default async function Home() {
       podSummary={pod?.rolling_summary ?? ''}
       initialRemainingPrompts={remainingPrompts}
       initialCycles={initialCycles}
+      userEmail={user.email ?? ''}
     />
   );
 }
