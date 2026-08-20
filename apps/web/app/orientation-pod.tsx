@@ -24,7 +24,7 @@ type OrientationPodProps = {
 // Used for cycles reloaded from history, where we only have the raw turn text.
 function parseVerdictFromVeritasText(text: string | undefined): Verdict | null {
   if (!text) return null;
-  const match = text.match(/\{[^{}]*\}(?!.*\{[^{}]*\})/s);
+  const match = text.match(/\{[^{}]*\}(?![\s\S]*\{[^{}]*\})/);
   if (!match) return null;
   try {
     const parsed = JSON.parse(match[0]);
