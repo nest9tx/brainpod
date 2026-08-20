@@ -97,7 +97,9 @@ def _construct(state: SwarmState) -> SwarmState:
     allowed_urls = state.get("allowed_urls", [])
     allowed_urls_note = (
         "Only cite these URLs verbatim; never introduce a new source, title, author, "
-        f"or publication that isn't in this list:\n{chr(10).join(allowed_urls) or 'None available.'}"
+        "or publication that isn't in this list. Do not gesture at unlinked authority "
+        "either — no 'based on official records/logs/transcripts' unless one of the URLs "
+        f"below is actually that record:\n{chr(10).join(allowed_urls) or 'None available.'}"
     )
     response = _model().invoke(
         [
