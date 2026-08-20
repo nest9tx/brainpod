@@ -26,6 +26,20 @@ export default function LoginPage() {
     }
   }
 
+  async function handleGoogleSignIn() {
+    const supabase = createClient();
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo: `${window.location.origin}/auth/callback` },
+    });
+    if (error) {
+      console.error('signInWithOAuth failed:', error);
+      setErrorMessage(error.message);
+      setStatus('error');
+    }
+    // On success the browser navigates away to Google, so no further state change here.
+  }
+
   return (
     <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center gap-6 px-6 py-16">
       <div className="space-y-2">
@@ -58,6 +72,22 @@ export default function LoginPage() {
       </div>
 
       <div className="space-y-3 border-t border-calm-border pt-6">
+        <button
+          onClick={handleGoogleSignIn}
+          className="w-full rounded-lg border border-calm-border bg-calm-surface px-4 py-2 text-sm font-medium text-calm-text hover:border-calm-accent"
+        >
+          Continue with Google
+        </button>
+        <p className="text-xs text-calm-muted">
+          No email is sent — this just confirms you&apos;re already signed into Google.
+        </p>
+
+        <div className="flex items-center gap-3 py-1">
+          <div className="h-px flex-1 bg-calm-border" />
+          <span className="text-xs text-calm-muted">or</span>
+          <div className="h-px flex-1 bg-calm-border" />
+        </div>
+
         <label htmlFor="email" className="text-sm text-calm-muted">
           Email address
         </label>
