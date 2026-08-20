@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
+import { ORIENTATION_POD_ID } from '@/lib/constants';
 
 export default async function PublicPodPage({ params }: { params: { podId: string } }) {
   const supabase = createClient();
@@ -9,6 +10,7 @@ export default async function PublicPodPage({ params }: { params: { podId: strin
     .select('id, name, category_slug, rolling_summary, created_at')
     .eq('id', params.podId)
     .eq('status', 'active')
+    .neq('id', ORIENTATION_POD_ID)
     .maybeSingle();
 
   if (!pod) notFound();

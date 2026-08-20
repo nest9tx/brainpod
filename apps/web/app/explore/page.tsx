@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/server';
+import { ORIENTATION_POD_ID } from '@/lib/constants';
 
 export default async function ExplorePage() {
   const supabase = createClient();
@@ -12,6 +13,7 @@ export default async function ExplorePage() {
     .from('mini_pods')
     .select('id, name, category_slug, rolling_summary, created_at')
     .eq('status', 'active')
+    .neq('id', ORIENTATION_POD_ID)
     .order('created_at', { ascending: false });
 
   return (

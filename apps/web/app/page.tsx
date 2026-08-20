@@ -1,11 +1,69 @@
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { ORIENTATION_POD_ID } from '@/lib/constants';
 import OrientationPod, { type SwarmTurn } from './orientation-pod';
 import PublicHome from './public-home';
 
 const FREE_TIER_DAILY_LIMIT = 5;
 // Every cycle writes exactly 1 Director turn + 4 agent turns, in that order.
 const TURNS_PER_CYCLE = 5;
+
+async function importLegacyTurns(admin: ReturnType<typeof createAdminClient>, userId: string, podId: string) {
+  const { count: privateTurnCount } = await admin
+    .from('pod_turns')
+    .select('id', { count: 'exact', head: true })
+    .eq('pod_id', podId);
+  if ((privateTurnCount ?? 0) > 0) return;
+
+  const { data: legacyTurns } = await admin
+    .from('pod_turns')
+    .select('id, sender_id, summary_conclusion, collapsed_reasoning, turn_sequence, created_at')
+    .eq('pod_id', ORIENTATION_POD_ID)
+    .order('turn_sequence', { ascending: true });
+  if (!legacyTurns?.length) return;
+
+  const userTurnIndexes = legacyTurns
+    .map((turn, index) => (turn.sender_id === userId ? index : -1))
+    .filter((index) => index >= 0);
+  if (!userTurnIndexes.length) return;
+
+  const selectedTurns = userTurnIndexes.flatMap((start, index) =>
+    legacyTurns.slice(start, userTurnIndexes[index + 1] ?? legacyTurns.length)
+  );
+  const { data: copiedTurns, error: copyError } = await admin
+    .from('pod_turns')
+    .insert(
+      selectedTurns.map((turn, index) => ({
+        pod_id: podId,
+        sender_id: turn.sender_id,
+        summary_conclusion: turn.summary_conclusion,
+        collapsed_reasoning: turn.collapsed_reasoning,
+        turn_sequence: index + 1,
+        created_at: turn.created_at,
+      }))
+    )
+    .select('id, turn_sequence');
+  if (copyError || !copiedTurns) return;
+
+  const legacyIds = selectedTurns.map((turn) => turn.id);
+  const { data: legacyArtifacts } = await admin
+    .from('artifacts')
+    .select('turn_id, creator_id, type, content, veritas_score, is_verified, question, created_at')
+    .in('turn_id', legacyIds);
+  const copiedIdBySequence = new Map(copiedTurns.map((turn) => [turn.turn_sequence, turn.id]));
+  const sequenceByLegacyId = new Map(selectedTurns.map((turn, index) => [turn.id, index + 1]));
+  if (legacyArtifacts?.length) {
+    await admin.from('artifacts').insert(
+      legacyArtifacts
+        .map((artifact) => ({
+          ...artifact,
+          pod_id: podId,
+          turn_id: copiedIdBySequence.get(sequenceByLegacyId.get(artifact.turn_id) ?? -1),
+        }))
+        .filter((artifact) => artifact.turn_id)
+    );
+  }
+}
 
 export default async function Home({ searchParams }: { searchParams: { pod?: string } }) {
   const supabase = createClient();
@@ -65,6 +123,8 @@ export default async function Home({ searchParams }: { searchParams: { pod?: str
     if (permissionError) throw new Error(`Could not grant pod access: ${permissionError.message}`);
     pod = newPod;
   }
+
+  await importLegacyTurns(createAdminClient(), user.id, pod.id);
 
   const [{ data: usage }, { data: history }] = await Promise.all([
     supabase

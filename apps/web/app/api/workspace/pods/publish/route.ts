@@ -14,6 +14,21 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ error: 'invalid_publish_request' }, { status: 400 });
   }
 
+  if (publish) {
+    const { data: currentPod } = await supabase
+      .from('mini_pods')
+      .select('rolling_summary')
+      .eq('id', id)
+      .eq('created_by', user.id)
+      .maybeSingle();
+    if (currentPod?.rolling_summary === 'Initial context baseline setting up...') {
+      return NextResponse.json(
+        { error: 'summary_required', detail: 'Add a meaningful released summary before publishing this pod.' },
+        { status: 400 }
+      );
+    }
+  }
+
   const admin = createAdminClient();
   const { data: pod, error } = await admin
     .from('mini_pods')
