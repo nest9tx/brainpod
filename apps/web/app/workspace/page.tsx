@@ -32,13 +32,7 @@ export default async function WorkspacePage() {
         .not('question', 'is', null)
         .order('created_at', { ascending: false })
     : { data: [] };
-  const artifactByQuestion = new Map<string, NonNullable<typeof rawArtifacts>[number]>();
-  for (const artifact of rawArtifacts ?? []) {
-    const key = artifact.question?.trim().toLowerCase() ?? artifact.id;
-    const existing = artifactByQuestion.get(key);
-    if (!existing || (!existing.is_verified && artifact.is_verified)) artifactByQuestion.set(key, artifact);
-  }
-  const artifacts = [...artifactByQuestion.values()];
+  const artifacts = rawArtifacts ?? [];
 
   return (
     <main className="mx-auto flex min-h-screen max-w-3xl flex-col gap-8 px-6 py-16">

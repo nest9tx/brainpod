@@ -47,6 +47,16 @@ export default function PodManager({
   const [editingCategory, setEditingCategory] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const groupedArtifacts = Array.from(
+    artifacts.reduce((groups, artifact) => {
+      const key = artifact.question?.trim().toLowerCase() ?? artifact.id;
+      const group = groups.get(key) ?? [];
+      group.push(artifact);
+      groups.set(key, group);
+      return groups;
+    }, new Map<string, Artifact[]>()).values()
+  );
+  const [expandedStudy, setExpandedStudy] = useState<string | null>(null);
 
 
   async function createPod() {
@@ -169,30 +179,51 @@ export default function PodManager({
       {artifacts.length > 0 && (
         <section className="space-y-3 border-t border-calm-border pt-8">
           <h2 className="text-lg font-medium text-calm-text">Studies in your pods</h2>
-          {artifacts.map((artifact) => (
-            <article key={artifact.id} className="rounded-lg border border-calm-border bg-calm-surface p-4">
-              <p className="text-sm text-calm-text">{artifact.question ?? 'Untitled study'}</p>
-              <p className="mt-1 text-xs text-calm-muted">
-                {artifact.is_verified ? `Verified · ${artifact.veritas_score ?? '—'}/100` : 'Not verified'}
-              </p>
-              <textarea
-                value={summaryDrafts[artifact.id] ?? ''}
-                onChange={(event) =>
-                  setSummaryDrafts((current) => ({ ...current, [artifact.id]: event.target.value }))
-                }
-                placeholder="Write a distinct public summary of this study"
-                rows={2}
-                className="mt-3 w-full rounded border border-calm-border bg-calm-bg p-2 text-sm text-calm-text"
-              />
-              <button
-                onClick={() => setArtifactPublished(artifact)}
-                disabled={busy}
-                className="mt-2 text-xs text-calm-muted underline"
-              >
-                {artifact.public_release ? 'Unpublish study summary' : 'Publish study summary'}
-              </button>
-            </article>
-          ))}
+          {groupedArtifacts.map((attempts) => {
+            const questionKey = attempts[0].question?.trim().toLowerCase() ?? attempts[0].id;
+            const isExpanded = expandedStudy === questionKey;
+            return (
+              <article key={questionKey} className="rounded-lg border border-calm-border bg-calm-surface p-4">
+                <button
+                  onClick={() => setExpandedStudy(isExpanded ? null : questionKey)}
+                  className="flex w-full items-start justify-between gap-4 text-left"
+                >
+                  <span className="text-sm text-calm-text">{attempts[0].question ?? 'Untitled study'}</span>
+                  <span className="shrink-0 text-xs text-calm-muted">
+                    {attempts.length} attempt{attempts.length === 1 ? '' : 's'} · {isExpanded ? 'Hide' : 'Review'}
+                  </span>
+                </button>
+                {isExpanded && (
+                  <div className="mt-4 space-y-4 border-t border-calm-border pt-4">
+                    {attempts.map((artifact, index) => (
+                      <div key={artifact.id} className="border-b border-calm-border pb-4 last:border-0 last:pb-0">
+                        <p className="text-xs uppercase tracking-wide text-calm-muted">Attempt {attempts.length - index}</p>
+                        <p className="mt-1 text-xs text-calm-muted">
+                          {artifact.is_verified ? `Verified · ${artifact.veritas_score ?? '—'}/100` : 'Not verified'}
+                        </p>
+                        <textarea
+                          value={summaryDrafts[artifact.id] ?? ''}
+                          onChange={(event) =>
+                            setSummaryDrafts((current) => ({ ...current, [artifact.id]: event.target.value }))
+                          }
+                          placeholder="Write a distinct public summary of this study"
+                          rows={2}
+                          className="mt-3 w-full rounded border border-calm-border bg-calm-bg p-2 text-sm text-calm-text"
+                        />
+                        <button
+                          onClick={() => setArtifactPublished(artifact)}
+                          disabled={busy}
+                          className="mt-2 text-xs text-calm-muted underline"
+                        >
+                          {artifact.public_release ? 'Unpublish study summary' : 'Publish this attempt'}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </article>
+            );
+          })}
         </section>
       )}
 
