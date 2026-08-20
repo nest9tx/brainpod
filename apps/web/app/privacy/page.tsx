@@ -49,6 +49,19 @@ export default function PrivacyPage() {
         models ourselves, and we don&apos;t run advertising trackers.
       </p>
 
+      <h2 className="mb-2 mt-8 text-lg font-medium text-calm-text">Google user data</h2>
+      <p className="mb-4">
+        If you choose Google sign-in, Brainpod receives only the basic identity information
+        Google provides for authentication, such as your email address, name, and profile
+        image when available. We use this information to create or identify your Brainpod
+        account, maintain your signed-in session, display your account identity, and enforce
+        usage limits. Brainpod does not request or access Gmail, Google Drive, contacts,
+        calendar, location, or other Google services. We do not sell Google user data, use it
+        for advertising, or transfer it to data brokers. Google sign-in data is handled by
+        Supabase Authentication and the Brainpod application database as needed to provide
+        the service.
+      </p>
+
       <h2 className="mb-2 mt-8 text-lg font-medium text-calm-text">Your choices</h2>
       <p className="mb-4">
         You can request deletion of your account and associated data at any time by contacting

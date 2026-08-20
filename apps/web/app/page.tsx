@@ -1,7 +1,7 @@
-import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { ORIENTATION_POD_ID } from '@/lib/constants';
 import OrientationPod, { type SwarmTurn } from './orientation-pod';
+import PublicHome from './public-home';
 
 const FREE_TIER_DAILY_LIMIT = 5;
 // Every cycle writes exactly 1 Director turn + 4 agent turns, in that order.
@@ -14,7 +14,7 @@ export default async function Home() {
   } = await supabase.auth.getUser();
 
   if (!user) {
-    redirect('/login');
+    return <PublicHome />;
   }
 
   const today = new Date().toISOString().slice(0, 10);
