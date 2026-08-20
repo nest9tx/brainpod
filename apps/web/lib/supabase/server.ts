@@ -15,10 +15,20 @@ export function createClient() {
           return cookieStore.get(name)?.value;
         },
         set(name: string, value: string, options: CookieOptions) {
-          cookieStore.set({ name, value, ...options });
+          try {
+            cookieStore.set({ name, value, ...options });
+          } catch {
+            // Called from a Server Component during a token refresh — Next.js only
+            // allows cookie writes in Server Actions/Route Handlers. Safe to ignore:
+            // middleware.ts already refreshes the session cookie on every request.
+          }
         },
         remove(name: string, options: CookieOptions) {
-          cookieStore.set({ name, value: '', ...options });
+          try {
+            cookieStore.set({ name, value: '', ...options });
+          } catch {
+            // See note above.
+          }
         },
       },
     }
