@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { ORIENTATION_POD_ID } from '@/lib/constants';
+import { AGENT_PROFILE_IDS, ORIENTATION_POD_ID } from '@/lib/constants';
 import OrientationPod, { type SwarmTurn } from './orientation-pod';
 import PublicHome from './public-home';
 
@@ -13,56 +13,87 @@ async function importLegacyTurns(admin: ReturnType<typeof createAdminClient>, us
     .from('pod_turns')
     .select('id', { count: 'exact', head: true })
     .eq('pod_id', podId);
-  if ((privateTurnCount ?? 0) > 0) return;
-
-  const { data: legacyTurns } = await admin
-    .from('pod_turns')
-    .select('id, sender_id, summary_conclusion, collapsed_reasoning, turn_sequence, created_at')
-    .eq('pod_id', ORIENTATION_POD_ID)
-    .order('turn_sequence', { ascending: true });
-  if (!legacyTurns?.length) return;
-
-  const userTurnIndexes = legacyTurns
-    .map((turn, index) => (turn.sender_id === userId ? index : -1))
-    .filter((index) => index >= 0);
-  if (!userTurnIndexes.length) return;
-
-  const selectedTurns = userTurnIndexes.flatMap((start, index) =>
-    legacyTurns.slice(start, userTurnIndexes[index + 1] ?? legacyTurns.length)
-  );
-  const { data: copiedTurns, error: copyError } = await admin
-    .from('pod_turns')
-    .insert(
-      selectedTurns.map((turn, index) => ({
-        pod_id: podId,
-        sender_id: turn.sender_id,
-        summary_conclusion: turn.summary_conclusion,
-        collapsed_reasoning: turn.collapsed_reasoning,
-        turn_sequence: index + 1,
-        created_at: turn.created_at,
-      }))
-    )
-    .select('id, turn_sequence');
-  if (copyError || !copiedTurns) return;
-
-  const legacyIds = selectedTurns.map((turn) => turn.id);
-  const { data: legacyArtifacts } = await admin
-    .from('artifacts')
-    .select('turn_id, creator_id, type, content, veritas_score, is_verified, question, created_at')
-    .in('turn_id', legacyIds);
-  const copiedIdBySequence = new Map(copiedTurns.map((turn) => [turn.turn_sequence, turn.id]));
-  const sequenceByLegacyId = new Map(selectedTurns.map((turn, index) => [turn.id, index + 1]));
-  if (legacyArtifacts?.length) {
-    await admin.from('artifacts').insert(
-      legacyArtifacts
-        .map((artifact) => ({
-          ...artifact,
-          pod_id: podId,
-          turn_id: copiedIdBySequence.get(sequenceByLegacyId.get(artifact.turn_id) ?? -1),
-        }))
-        .filter((artifact) => artifact.turn_id)
-    );
+  if ((privateTurnCount ?? 0) === 0) {
+    const { data: legacyTurns } = await admin
+      .from('pod_turns')
+      .select('id, sender_id, summary_conclusion, collapsed_reasoning, turn_sequence, created_at')
+      .eq('pod_id', ORIENTATION_POD_ID)
+      .order('turn_sequence', { ascending: true });
+    if (legacyTurns?.length) {
+      const userTurnIndexes = legacyTurns
+        .map((turn, index) => (turn.sender_id === userId ? index : -1))
+        .filter((index) => index >= 0);
+      const selectedTurns = userTurnIndexes.flatMap((start, index) =>
+        legacyTurns.slice(start, userTurnIndexes[index + 1] ?? legacyTurns.length)
+      );
+      if (selectedTurns.length) {
+        const { data: copiedTurns } = await admin
+          .from('pod_turns')
+          .insert(
+            selectedTurns.map((turn, index) => ({
+              pod_id: podId,
+              sender_id: turn.sender_id,
+              summary_conclusion: turn.summary_conclusion,
+              collapsed_reasoning: turn.collapsed_reasoning,
+              turn_sequence: index + 1,
+              created_at: turn.created_at,
+            }))
+          )
+          .select('id, turn_sequence');
+        if (copiedTurns) {
+          const legacyIds = selectedTurns.map((turn) => turn.id);
+          const { data: legacyArtifacts } = await admin
+            .from('artifacts')
+            .select('turn_id, creator_id, type, content, veritas_score, is_verified, question, created_at')
+            .in('turn_id', legacyIds);
+          const copiedIdBySequence = new Map(copiedTurns.map((turn) => [turn.turn_sequence, turn.id]));
+          const sequenceByLegacyId = new Map(selectedTurns.map((turn, index) => [turn.id, index + 1]));
+          if (legacyArtifacts?.length) {
+            await admin.from('artifacts').insert(
+              legacyArtifacts
+                .map((artifact) => ({
+                  ...artifact,
+                  pod_id: podId,
+                  turn_id: copiedIdBySequence.get(sequenceByLegacyId.get(artifact.turn_id) ?? -1),
+                }))
+                .filter((artifact) => artifact.turn_id)
+            );
+          }
+        }
+      }
+    }
   }
+
+  await backfillStudyArtifacts(admin, podId);
+}
+
+async function backfillStudyArtifacts(admin: ReturnType<typeof createAdminClient>, podId: string) {
+  const { data: turns } = await admin
+    .from('pod_turns')
+    .select('id, sender_id, summary_conclusion, turn_sequence')
+    .eq('pod_id', podId)
+    .order('turn_sequence', { ascending: true });
+  if (!turns?.length) return;
+  const { data: existing } = await admin.from('artifacts').select('turn_id').eq('pod_id', podId);
+  const existingTurnIds = new Set(existing?.map((artifact) => artifact.turn_id) ?? []);
+  const missing = [];
+  for (let index = 0; index + 4 < turns.length; index += 5) {
+    const cycle = turns.slice(index, index + 5);
+    const director = cycle[0];
+    const construct = cycle.find((turn) => turn.sender_id === AGENT_PROFILE_IDS.synthetix);
+    if (director.sender_id === AGENT_PROFILE_IDS.synthetix || !construct || existingTurnIds.has(construct.id)) continue;
+    missing.push({
+      pod_id: podId,
+      turn_id: construct.id,
+      creator_id: AGENT_PROFILE_IDS.synthetix,
+      type: 'structured_analysis',
+      content: construct.summary_conclusion,
+      question: director.summary_conclusion,
+      veritas_score: null,
+      is_verified: false,
+    });
+  }
+  if (missing.length) await admin.from('artifacts').insert(missing);
 }
 
 export default async function Home({ searchParams }: { searchParams: { pod?: string } }) {
