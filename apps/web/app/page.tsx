@@ -17,7 +17,7 @@ async function importLegacyTurns(admin: ReturnType<typeof createAdminClient>, us
   if ((privateTurnCount ?? 0) === 0) {
     const { data: legacyTurns } = await admin
       .from('pod_turns')
-      .select('id, sender_id, summary_conclusion, collapsed_reasoning, turn_sequence, created_at')
+      .select('id, sender_id, summary_conclusion, collapsed_reasoning, turn_sequence, created_at, sender_label')
       .eq('pod_id', ORIENTATION_POD_ID)
       .order('turn_sequence', { ascending: true });
     if (legacyTurns?.length) {
@@ -38,6 +38,7 @@ async function importLegacyTurns(admin: ReturnType<typeof createAdminClient>, us
               collapsed_reasoning: turn.collapsed_reasoning,
               turn_sequence: index + 1,
               created_at: turn.created_at,
+              sender_label: turn.sender_label,
             }))
           )
           .select('id, turn_sequence');
@@ -180,7 +181,6 @@ export default async function Home({ searchParams }: { searchParams: { pod?: str
 
   await importLegacyTurns(admin, user.id, pod.id);
 
-  // Ensure profile exists without overwriting a chosen display name
   const { data: existingProfile } = await admin
     .from('profiles')
     .select('id, display_name')
@@ -206,7 +206,9 @@ export default async function Home({ searchParams }: { searchParams: { pod?: str
       .maybeSingle(),
     admin
       .from('pod_turns')
-      .select('summary_conclusion, turn_sequence, sender_id, sender:profiles!pod_turns_sender_id_fkey(display_name)')
+      .select(
+        'summary_conclusion, turn_sequence, sender_id, sender_label, sender:profiles!pod_turns_sender_id_fkey(display_name)'
+      )
       .eq('pod_id', pod.id)
       .order('turn_sequence', { ascending: true })
       .limit(200),
@@ -218,6 +220,7 @@ export default async function Home({ searchParams }: { searchParams: { pod?: str
     summary_conclusion: string;
     turn_sequence: number;
     sender_id: string;
+    sender_label: string | null;
     sender: { display_name: string } | null;
   };
 
@@ -234,11 +237,12 @@ export default async function Home({ searchParams }: { searchParams: { pod?: str
     const director = chunk[0];
     if (!director) continue;
     const isAgentDirector = AGENT_ID_SET.has(director.sender_id);
+    // Prefer frozen label from contribution time; fall back for older rows
     const label = isAgentDirector
       ? 'Director'
-      : director.sender?.display_name || 'Director';
+      : director.sender_label || director.sender?.display_name || 'Director';
     const agentTurns: SwarmTurn[] = chunk.slice(1).map((turn) => ({
-      agent: turn.sender?.display_name ?? 'Contributor',
+      agent: turn.sender_label || turn.sender?.display_name || 'Contributor',
       summary_conclusion: turn.summary_conclusion,
     }));
     initialCycles.push({
