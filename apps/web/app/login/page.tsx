@@ -1,22 +1,32 @@
 'use client';
 
 import { useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import Link from 'next/link';
+import SiteNav from '@/components/site-nav';
+import SiteFooter from '@/components/site-footer';
 
-// Passwordless entry point: magic-link email only, per the outline's
-// "low-friction auth" onboarding requirement.
 export default function LoginPage() {
+  const searchParams = useSearchParams();
+  const nextPath = searchParams.get('next') || '/';
   const [email, setEmail] = useState('');
   const [status, setStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
   const [errorMessage, setErrorMessage] = useState('');
+
+  function redirectTarget() {
+    if (nextPath.startsWith('/') && !nextPath.startsWith('//')) return nextPath;
+    return '/';
+  }
 
   async function handleSignIn() {
     setStatus('sending');
     const supabase = createClient();
     const { error } = await supabase.auth.signInWithOtp({
       email,
-      options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
+      options: {
+        emailRedirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(redirectTarget())}`,
+      },
     });
     if (error) {
       console.error('signInWithOtp failed:', error);
@@ -31,44 +41,46 @@ export default function LoginPage() {
     const supabase = createClient();
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
-      options: { redirectTo: `${window.location.origin}/auth/callback` },
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(redirectTarget())}`,
+      },
     });
     if (error) {
       console.error('signInWithOAuth failed:', error);
       setErrorMessage(error.message);
       setStatus('error');
     }
-    // On success the browser navigates away to Google, so no further state change here.
   }
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center gap-6 px-6 py-16">
+    <main className="mx-auto flex min-h-screen max-w-md flex-col gap-8 px-6 py-16">
+      <SiteNav variant="public" />
+
       <div className="space-y-2">
         <p className="text-sm uppercase tracking-widest text-calm-muted">Brainpod</p>
         <h1 className="text-xl font-medium text-calm-text">
-          A public-benefit space where human direction and AI agents build things
-          together — openly, and only with verification behind every result.
+          A public-benefit space where human direction and AI agents build things together —
+          openly, and only with verification behind every result.
         </h1>
         <p className="text-sm leading-relaxed text-calm-muted">
-          Sign in below to enter the Orientation Mini-Pod: a small, guided room where you
-          direct four native agents through one working cycle. No cost, no cash-out, and
-          nothing you direct is public until you choose to share it.
+          Sign in below to enter the Orientation Mini-Pod: a small, guided room where you direct
+          four native agents through one working cycle. No cost, no cash-out, and nothing you
+          direct is public until you choose to share it.
         </p>
       </div>
 
       <div className="space-y-2 border-t border-calm-border pt-4">
         <p className="text-sm leading-relaxed text-calm-muted">
-          Brainpod bridges lived, physical experience with the swarm&apos;s breadth of
-          digital knowledge. Individuals and small Mini-Pods work as co-efforts, not a
-          leaderboard — the goal is for everyone involved, human and agent, to learn and
-          grow, which strengthens the whole ecosystem. There&apos;s no hierarchy to climb,
-          only perspectives to bring.
+          Brainpod bridges lived, physical experience with the swarm&apos;s breadth of digital
+          knowledge. Individuals and small Mini-Pods work as co-efforts, not a leaderboard — the
+          goal is for everyone involved, human and agent, to learn and grow, which strengthens the
+          whole ecosystem. There&apos;s no hierarchy to climb, only perspectives to bring.
         </p>
         <p className="text-xs leading-relaxed text-calm-muted">
           We only ask for your email to run this one-time sign-in link and track your daily
-          free-prompt count — nothing else is collected here. Advanced members can later
-          bring their own agents (BYOA) into shared Mini-Pods under the same verification
-          rules as native agents.
+          free-prompt count — nothing else is collected here. Advanced members can later bring their
+          own agents (BYOA) into shared Mini-Pods under the same verification rules as native
+          agents.
         </p>
       </div>
 
@@ -119,7 +131,7 @@ export default function LoginPage() {
         </p>
         {status === 'sent' && (
           <p className="text-sm text-calm-accent">
-            Link sent. Open it from this device to land back in the Orientation Mini-Pod.
+            Link sent. Open it from this device to continue where you left off.
           </p>
         )}
         {status === 'error' && (
@@ -138,6 +150,8 @@ export default function LoginPage() {
         </a>
         .
       </p>
+
+      <SiteFooter />
     </main>
   );
 }
