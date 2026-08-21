@@ -1,8 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { createClient } from '@/lib/supabase/client';
-import Link from 'next/link';
+import SiteNav from '@/components/site-nav';
+import SiteFooter from '@/components/site-footer';
 
 const SUGGESTED_PROMPT =
   'Help me understand how a Ground → Pressure-test → Construct → Verify cycle would tackle a small, well-defined problem.';
@@ -300,12 +300,6 @@ export default function OrientationPod({
     }
   }
 
-  async function handleSignOut() {
-    const supabase = createClient();
-    await supabase.auth.signOut();
-    window.location.href = '/login';
-  }
-
   const activeCycle =
     isFollowUp && resumeCycleIndex !== null ? cycles[resumeCycleIndex] : cycles[0];
   const activeModeLabel =
@@ -314,20 +308,7 @@ export default function OrientationPod({
 
   return (
     <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-8 px-6 py-16">
-      <div className="flex items-center justify-between text-xs text-calm-muted">
-        <span>Signed in as {userEmail}</span>
-        <div className="flex items-center gap-4">
-          <Link href="/workspace" className="underline hover:text-calm-text">
-            Workspace
-          </Link>
-          <Link href="/explore" className="underline hover:text-calm-text">
-            Explore
-          </Link>
-          <button onClick={handleSignOut} className="underline hover:text-calm-text">
-            Sign out
-          </button>
-        </div>
-      </div>
+      <SiteNav variant="app" userEmail={userEmail} />
 
       <header className="space-y-3">
         <p className="text-sm uppercase tracking-widest text-calm-muted">
@@ -338,14 +319,14 @@ export default function OrientationPod({
         </h1>
         {liveSummary && <p className="text-sm leading-relaxed text-calm-muted">{liveSummary}</p>}
         <p className="text-xs text-calm-muted">
-          Choose the kind of work you want, then direct the swarm. You can continue a thread
-          or start fresh. Nothing earns Proof-of-Value until @Veritas says so.
+          Choose the kind of work you want, then direct the swarm. You can continue a thread or start
+          fresh. Nothing earns Proof-of-Value until @Veritas says so.
         </p>
       </header>
 
       <div className="rounded-lg border border-calm-border bg-calm-surface p-4 text-sm text-calm-muted">
-        {remainingPrompts} free Director prompt{remainingPrompts === 1 ? '' : 's'} remaining
-        today · resets 00:00 UTC
+        {remainingPrompts} free Director prompt{remainingPrompts === 1 ? '' : 's'} remaining today ·
+        resets 00:00 UTC
       </div>
 
       {isFirstExperience && (
@@ -354,8 +335,8 @@ export default function OrientationPod({
           <p className="mt-2 text-calm-muted">
             This is your Orientation Mini-Pod. Start with any mode that fits what you need right now.
             Brainstorm for open exploration, Assist when you already have an idea to refine, or
-            Construct when you want a structured result that can be verified. You can always continue
-            a thread or begin again. The swarm is here to collaborate, not to test you.
+            Construct when you want a structured result that can be verified. You can always continue a
+            thread or begin again. The swarm is here to collaborate, not to test you.
           </p>
         </div>
       )}
@@ -461,8 +442,8 @@ export default function OrientationPod({
         </button>
         {status === 'error' && (
           <p className="text-sm text-red-400">
-            The orchestra service isn’t reachable yet — this is expected until
-            apps/orchestra is running and its API keys are configured.
+            The orchestra service isn’t reachable yet — this is expected until apps/orchestra is
+            running and its API keys are configured.
           </p>
         )}
         {status === 'limit_reached' && (
@@ -472,8 +453,8 @@ export default function OrientationPod({
         )}
         {status === 'duplicate' && (
           <p className="text-sm text-calm-muted">
-            This exact question already has a verified result in this pod — try a new angle
-            or a different question to earn Proof-of-Value.
+            This exact question already has a verified result in this pod — try a new angle or a
+            different question to earn Proof-of-Value.
           </p>
         )}
       </section>
@@ -488,8 +469,8 @@ export default function OrientationPod({
 
         {cycles.length > 0 && (
           <p className="text-xs text-calm-muted">
-            Prior work in this pod. Use <span className="text-calm-text">Continue</span> on any
-            item to resume that thread, or start a fresh question above.
+            Prior work in this pod. Use <span className="text-calm-text">Continue</span> on any item
+            to resume that thread, or start a fresh question above.
           </p>
         )}
 
@@ -551,6 +532,8 @@ export default function OrientationPod({
           );
         })}
       </section>
+
+      <SiteFooter />
     </main>
   );
 }
