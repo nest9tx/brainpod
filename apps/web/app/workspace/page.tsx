@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import SiteNav from '@/components/site-nav';
 import SiteFooter from '@/components/site-footer';
 import PodManager from './pod-manager';
+import DisplayNameEditor from './display-name';
 
 export default async function WorkspacePage() {
   const supabase = createClient();
@@ -67,6 +68,12 @@ export default async function WorkspacePage() {
         .order('created_at', { ascending: false })
     : { data: [] };
 
+  const { data: profile } = await admin
+    .from('profiles')
+    .select('display_name')
+    .eq('id', user.id)
+    .maybeSingle();
+
   const { data: pendingReceived } = user.email
     ? await admin
         .from('pod_invites')
@@ -116,6 +123,11 @@ export default async function WorkspacePage() {
           work stays in the record.
         </p>
       </header>
+
+      <DisplayNameEditor
+        initialName={profile?.display_name ?? user.email?.split('@')[0] ?? 'Director'}
+        email={user.email ?? ''}
+      />
 
       <PodManager
         initialPods={pods}

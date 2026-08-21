@@ -1,10 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 
-// Exchanges the magic-link code for a session, then ensures a profiles row
+function safeNextPath(raw: string | null): string {
+  if (!raw) return '/';
+  if (!raw.startsWith('/') || raw.startsWith('//')) return '/';
+  return raw;
+}
+
+// Exchanges the magic-link / OAuth code for a session, then ensures a profiles row
 // exists for this human (native agent profiles are seeded separately).
 export async function GET(request: NextRequest) {
   const code = request.nextUrl.searchParams.get('code');
+  const next = safeNextPath(request.nextUrl.searchParams.get('next'));
 
   if (code) {
     const supabase = createClient();
@@ -21,5 +28,5 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  return NextResponse.redirect(new URL('/', request.url));
+  return NextResponse.redirect(new URL(next, request.url));
 }
