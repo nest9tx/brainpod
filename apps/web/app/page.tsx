@@ -5,8 +5,9 @@ import OrientationPod, { type SwarmTurn } from './orientation-pod';
 import PublicHome from './public-home';
 
 const FREE_TIER_DAILY_LIMIT = 5;
-// Every cycle writes exactly 1 Director turn + 4 agent turns, in that order.
 const TURNS_PER_CYCLE = 5;
+
+const AGENT_ID_SET = new Set(Object.values(AGENT_PROFILE_IDS));
 
 async function importLegacyTurns(admin: ReturnType<typeof createAdminClient>, userId: string, podId: string) {
   const { count: privateTurnCount } = await admin
@@ -81,7 +82,8 @@ async function backfillStudyArtifacts(admin: ReturnType<typeof createAdminClient
     const cycle = turns.slice(index, index + 5);
     const director = cycle[0];
     const construct = cycle.find((turn) => turn.sender_id === AGENT_PROFILE_IDS.synthetix);
-    if (director.sender_id === AGENT_PROFILE_IDS.synthetix || !construct || existingTurnIds.has(construct.id)) continue;
+    if (director.sender_id === AGENT_PROFILE_IDS.synthetix || !construct || existingTurnIds.has(construct.id))
+      continue;
     missing.push({
       pod_id: podId,
       turn_id: construct.id,
@@ -107,30 +109,53 @@ export default async function Home({ searchParams }: { searchParams: { pod?: str
   }
 
   const today = new Date().toISOString().slice(0, 10);
+  const admin = createAdminClient();
 
-  let { data: pod } = await supabase
-    .from('mini_pods')
-    .select('id, name, rolling_summary')
-    .eq('created_by', user.id)
-    .eq('category_slug', 'orientation')
-    .eq('status', 'private_isolated')
-    .order('created_at', { ascending: true })
-    .limit(1)
-    .maybeSingle();
+  let pod: { id: string; name: string; rolling_summary: string } | null = null;
 
   if (searchParams.pod) {
-    const { data: requestedPod } = await supabase
+    // Owner path
+    const { data: owned } = await supabase
       .from('mini_pods')
       .select('id, name, rolling_summary')
       .eq('id', searchParams.pod)
       .eq('created_by', user.id)
-      .eq('status', 'private_isolated')
       .maybeSingle();
-    if (requestedPod) pod = requestedPod;
+    if (owned) {
+      pod = owned;
+    } else {
+      // Shared collaborator path
+      const { data: access } = await admin
+        .from('private_pod_permissions')
+        .select('pod_id')
+        .eq('pod_id', searchParams.pod)
+        .eq('profile_id', user.id)
+        .maybeSingle();
+      if (access) {
+        const { data: shared } = await admin
+          .from('mini_pods')
+          .select('id, name, rolling_summary')
+          .eq('id', searchParams.pod)
+          .maybeSingle();
+        if (shared) pod = shared;
+      }
+    }
   }
 
   if (!pod) {
-    const admin = createAdminClient();
+    const { data: orientation } = await supabase
+      .from('mini_pods')
+      .select('id, name, rolling_summary')
+      .eq('created_by', user.id)
+      .eq('category_slug', 'orientation')
+      .eq('status', 'private_isolated')
+      .order('created_at', { ascending: true })
+      .limit(1)
+      .maybeSingle();
+    pod = orientation;
+  }
+
+  if (!pod) {
     const { data: newPod, error: podError } = await admin
       .from('mini_pods')
       .insert({
@@ -155,7 +180,16 @@ export default async function Home({ searchParams }: { searchParams: { pod?: str
     pod = newPod;
   }
 
-  await importLegacyTurns(createAdminClient(), user.id, pod.id);
+  await importLegacyTurns(admin, user.id, pod.id);
+
+  // Ensure this user has a readable display name for multi-human rooms
+  await admin.from('profiles').upsert(
+    {
+      id: user.id,
+      display_name: user.email?.split('@')[0] ?? 'Director',
+    },
+    { onConflict: 'id' }
+  );
 
   const [{ data: usage }, { data: history }] = await Promise.all([
     supabase
@@ -164,28 +198,48 @@ export default async function Home({ searchParams }: { searchParams: { pod?: str
       .eq('profile_id', user.id)
       .eq('usage_date', today)
       .maybeSingle(),
-    supabase
+    admin
       .from('pod_turns')
-      .select('summary_conclusion, turn_sequence, sender:profiles(display_name)')
+      .select('summary_conclusion, turn_sequence, sender_id, sender:profiles!pod_turns_sender_id_fkey(display_name)')
       .eq('pod_id', pod.id)
       .order('turn_sequence', { ascending: true })
-      .limit(100),
+      .limit(200),
   ]);
 
   const remainingPrompts = Math.max(FREE_TIER_DAILY_LIMIT - (usage?.prompt_count ?? 0), 0);
 
-  const flatHistory: SwarmTurn[] =
-    history?.map((turn) => ({
-      agent: (turn.sender as unknown as { display_name: string } | null)?.display_name ?? 'Director',
-      summary_conclusion: turn.summary_conclusion,
-    })) ?? [];
+  type HistoryRow = {
+    summary_conclusion: string;
+    turn_sequence: number;
+    sender_id: string;
+    sender: { display_name: string } | null;
+  };
 
-  // Group into per-question cycles (newest first) so the timeline reads as a
-  // collapsible feed instead of one long flat list.
-  const initialCycles: { question: string; turns: SwarmTurn[] }[] = [];
-  for (let i = 0; i < flatHistory.length; i += TURNS_PER_CYCLE) {
-    const [director, ...agentTurns] = flatHistory.slice(i, i + TURNS_PER_CYCLE);
-    if (director) initialCycles.push({ question: director.summary_conclusion, turns: agentTurns });
+  const rows = (history ?? []) as unknown as HistoryRow[];
+
+  const initialCycles: {
+    question: string;
+    directorLabel: string;
+    turns: SwarmTurn[];
+  }[] = [];
+
+  for (let i = 0; i < rows.length; i += TURNS_PER_CYCLE) {
+    const chunk = rows.slice(i, i + TURNS_PER_CYCLE);
+    const director = chunk[0];
+    if (!director) continue;
+    const isAgentDirector = AGENT_ID_SET.has(director.sender_id);
+    const directorLabel = isAgentDirector
+      ? 'Director'
+      : director.sender?.display_name || 'Director';
+    const agentTurns: SwarmTurn[] = chunk.slice(1).map((turn) => ({
+      agent: turn.sender?.display_name ?? 'Contributor',
+      summary_conclusion: turn.summary_conclusion,
+    }));
+    initialCycles.push({
+      question: director.summary_conclusion,
+      directorLabel,
+      turns: agentTurns,
+    });
   }
   initialCycles.reverse();
 
@@ -197,7 +251,7 @@ export default async function Home({ searchParams }: { searchParams: { pod?: str
       initialRemainingPrompts={remainingPrompts}
       initialCycles={initialCycles}
       userEmail={user.email ?? ''}
+      currentDirectorLabel={user.email?.split('@')[0] ?? 'Director'}
     />
   );
 }
-
