@@ -47,6 +47,17 @@ function parseVerdictFromVeritasText(text: string | undefined): Verdict | null {
   }
 }
 
+function buildPriorContextFromCycle(cycle: Cycle, directorNote?: string): string {
+  const agentBits = cycle.turns
+    .map((t) => `${t.agent}: ${t.summary_conclusion.slice(0, 600)}`)
+    .join('\n');
+  let context = `Director: ${cycle.question}\n${agentBits}`;
+  if (directorNote?.trim()) {
+    context += `\n\n---\n\nDirector note / additional context for this continuation:\n${directorNote.trim()}`;
+  }
+  return context;
+}
+
 function buildPriorContext(cycles: Cycle[], directorNote?: string): string {
   if (cycles.length === 0 && !directorNote?.trim()) return '';
   const chronological = [...cycles].reverse();
@@ -83,7 +94,6 @@ const MODE_OPTIONS: { id: WorkMode; label: string; description: string }[] = [
   },
 ];
 
-/** Subtle identity for each native agent — keeps the calm palette while making roles distinct. */
 const AGENT_STYLE: Record<
   string,
   { label: string; role: string; accent: string; border: string }
@@ -198,18 +208,29 @@ export default function OrientationPod({
     'idle' | 'thinking' | 'error' | 'limit_reached' | 'duplicate'
   >('idle');
   const [remainingPrompts, setRemainingPrompts] = useState(initialRemainingPrompts);
-  const [isFollowUp, setIsFollowUp] = useState(false);
+  // Resume the latest thread when returning to a pod that already has history
+  const [isFollowUp, setIsFollowUp] = useState(initialCycles.length > 0);
+  // Which cycle is the active continuation target (null = newest / full recent history)
+  const [resumeCycleIndex, setResumeCycleIndex] = useState<number | null>(
+    initialCycles.length > 0 ? 0 : null
+  );
 
   async function handleDirect() {
     if (!directorPrompt.trim() || remainingPrompts <= 0) return;
     setStatus('thinking');
     setPendingQuestion(directorPrompt);
 
-    const priorContext = isFollowUp
-      ? buildPriorContext(cycles, directorNote)
-      : directorNote.trim()
-        ? `Director note / additional context:\n${directorNote.trim()}`
-        : '';
+    let priorContext = '';
+    if (isFollowUp && cycles.length > 0) {
+      if (resumeCycleIndex !== null && cycles[resumeCycleIndex]) {
+        // Continue from a specific prior cycle
+        priorContext = buildPriorContextFromCycle(cycles[resumeCycleIndex], directorNote);
+      } else {
+        priorContext = buildPriorContext(cycles, directorNote);
+      }
+    } else if (directorNote.trim()) {
+      priorContext = `Director note / additional context:\n${directorNote.trim()}`;
+    }
 
     try {
       const res = await fetch('/api/orchestra', {
@@ -247,6 +268,7 @@ export default function OrientationPod({
         ...prev,
       ]);
       setExpandedCycle(0);
+      setResumeCycleIndex(0);
       setPendingQuestion(null);
       setDirectorPrompt('');
       setDirectorNote('');
@@ -261,8 +283,21 @@ export default function OrientationPod({
 
   function startFresh() {
     setIsFollowUp(false);
+    setResumeCycleIndex(null);
     setDirectorPrompt('');
     setDirectorNote('');
+  }
+
+  function continueFromCycle(index: number) {
+    setIsFollowUp(true);
+    setResumeCycleIndex(index);
+    setExpandedCycle(index);
+    setDirectorPrompt('');
+    setDirectorNote('');
+    // Scroll toward the composer
+    if (typeof window !== 'undefined') {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
   }
 
   async function handleSignOut() {
@@ -271,7 +306,8 @@ export default function OrientationPod({
     window.location.href = '/login';
   }
 
-  const latestCycle = cycles[0];
+  const activeCycle =
+    isFollowUp && resumeCycleIndex !== null ? cycles[resumeCycleIndex] : cycles[0];
   const activeModeLabel =
     MODE_OPTIONS.find((o) => o.id === mode)?.label ?? 'Construct & Verify';
   const isFirstExperience = cycles.length === 0 && !pendingQuestion;
@@ -324,7 +360,6 @@ export default function OrientationPod({
         </div>
       )}
 
-      {/* Work Mode Selector — always visible */}
       <section className="space-y-3">
         <div className="flex items-center justify-between">
           <p className="text-sm text-calm-muted">What kind of work is this?</p>
@@ -364,11 +399,11 @@ export default function OrientationPod({
           )}
         </div>
 
-        {isFollowUp && latestCycle && (
+        {isFollowUp && activeCycle && (
           <div className="rounded-md border border-calm-border/60 bg-calm-bg/50 px-3 py-2 text-xs text-calm-muted">
-            Continuing from: “{latestCycle.question.slice(0, 120)}
-            {latestCycle.question.length > 120 ? '…' : ''}”
-            {latestCycle.mode ? ` · previous mode: ${latestCycle.mode}` : ''}
+            Continuing from: “{activeCycle.question.slice(0, 120)}
+            {activeCycle.question.length > 120 ? '…' : ''}”
+            {activeCycle.mode ? ` · previous mode: ${activeCycle.mode}` : ''}
           </div>
         )}
 
@@ -389,7 +424,6 @@ export default function OrientationPod({
           onChange={(e) => setDirectorPrompt(e.target.value)}
         />
 
-        {/* Lightweight note / reference — available on every send, especially useful on continuation */}
         <div className="space-y-1">
           <label htmlFor="director-note" className="text-xs text-calm-muted">
             Optional note or reference (short)
@@ -454,8 +488,14 @@ export default function OrientationPod({
 
         {cycles.map((cycle, i) => {
           const isExpanded = expandedCycle === i;
+          const isActiveResume = isFollowUp && resumeCycleIndex === i;
           return (
-            <article key={i} className="rounded-lg border border-calm-border bg-calm-surface">
+            <article
+              key={i}
+              className={`rounded-lg border bg-calm-surface ${
+                isActiveResume ? 'border-calm-accent/50' : 'border-calm-border'
+              }`}
+            >
               <button
                 onClick={() => setExpandedCycle(isExpanded ? null : i)}
                 className="flex w-full items-start justify-between gap-3 p-4 text-left"
@@ -465,6 +505,7 @@ export default function OrientationPod({
                   <p className="text-xs text-calm-muted">
                     {cycle.mode ? `${cycle.mode} · ` : ''}
                     {cycle.turns.map((t) => t.agent).join(' → ')}
+                    {isActiveResume ? ' · continuing' : ''}
                   </p>
                 </div>
                 <span
@@ -484,6 +525,15 @@ export default function OrientationPod({
                     <AgentTurn key={j} turn={turn} />
                   ))}
                   {cycle.verdict && <ContributionNote verdict={cycle.verdict} />}
+                  <div className="pt-1">
+                    <button
+                      type="button"
+                      onClick={() => continueFromCycle(i)}
+                      className="text-xs text-calm-accent underline hover:text-calm-text"
+                    >
+                      {isActiveResume ? 'Continuing this thread' : 'Continue this thread'}
+                    </button>
+                  </div>
                 </div>
               )}
             </article>
