@@ -21,6 +21,7 @@ app.add_middleware(
 
 class DirectRequest(BaseModel):
     director_prompt: str
+    prior_context: str | None = None
 
 
 @app.get("/")
@@ -42,4 +43,7 @@ def direct(request: DirectRequest):
             detail="orchestra_not_configured: OPENAI_API_KEY is not set yet",
         )
 
-    return run_swarm_cycle(request.director_prompt)
+    return run_swarm_cycle(
+        director_prompt=request.director_prompt,
+        prior_context=request.prior_context or "",
+    )
