@@ -132,6 +132,40 @@ function AgentTurn({ turn }: { turn: SwarmTurn }) {
   );
 }
 
+function ContributionNote({ verdict }: { verdict: Verdict }) {
+  if (verdict.pov_eligible) {
+    return (
+      <div className="rounded-md border border-calm-accent/40 bg-calm-accent/10 px-3 py-2.5 text-xs text-calm-text">
+        <p className="font-medium text-calm-accent">Collaborative contribution advanced</p>
+        <p className="mt-1 text-calm-muted">
+          This cycle was verified. Proof-of-Value was recorded for the work produced under human
+          direction with the swarm. Score {verdict.score}/100.
+        </p>
+      </div>
+    );
+  }
+
+  const score = verdict.score ?? 0;
+  if (score >= 70) {
+    return (
+      <div className="rounded-md border border-calm-border bg-calm-bg px-3 py-2.5 text-xs text-calm-muted">
+        <p className="font-medium text-calm-text">Strong collaborative progress</p>
+        <p className="mt-1">
+          Score {score}/100. Not yet verified for Proof-of-Value. You can continue the thread to
+          strengthen grounding, clarity, or structure.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-md bg-calm-bg px-3 py-2 text-xs text-calm-muted">
+      Not yet verified — no Proof-of-Value awarded. Score {verdict.score ?? '—'}/100. You can
+      continue the thread to improve it.
+    </div>
+  );
+}
+
 export default function OrientationPod({
   podId,
   podName,
@@ -420,19 +454,7 @@ export default function OrientationPod({
                   {cycle.turns.map((turn, j) => (
                     <AgentTurn key={j} turn={turn} />
                   ))}
-                  {cycle.verdict && (
-                    <div
-                      className={`rounded-md px-3 py-2 text-xs ${
-                        cycle.verdict.pov_eligible
-                          ? 'bg-calm-accent/10 text-calm-accent'
-                          : 'bg-calm-bg text-calm-muted'
-                      }`}
-                    >
-                      {cycle.verdict.pov_eligible
-                        ? `Verified — Proof-of-Value awarded. Score ${cycle.verdict.score}/100.`
-                        : `Not yet verified — no Proof-of-Value awarded. Score ${cycle.verdict.score ?? '—'}/100. You can continue the thread to improve it.`}
-                    </div>
-                  )}
+                  {cycle.verdict && <ContributionNote verdict={cycle.verdict} />}
                 </div>
               )}
             </article>
