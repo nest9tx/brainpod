@@ -18,7 +18,11 @@ const ARTIFACT_VERIFIED_POV_DELTA = 10;
 // Auth + quota gate, then proxy from the browser to the orchestra (FastAPI/LangGraph)
 // swarm service, persisting both the Director's turn and each agent's turn to pod_turns.
 export async function POST(request: NextRequest) {
-  const { director_prompt: directorPrompt, pod_id: podId } = await request.json();
+  const body = await request.json();
+  const directorPrompt: string = body.director_prompt;
+  const podId: string = body.pod_id;
+  const priorContext: string = body.prior_context ?? '';
+
   const supabase = createClient();
 
   const {
@@ -98,7 +102,10 @@ export async function POST(request: NextRequest) {
   const response = await fetch(`${orchestraUrl}/direct`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ director_prompt: directorPrompt }),
+    body: JSON.stringify({
+      director_prompt: directorPrompt,
+      prior_context: priorContext || undefined,
+    }),
   });
 
   if (!response.ok) {
