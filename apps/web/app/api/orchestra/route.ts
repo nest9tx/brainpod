@@ -19,6 +19,26 @@ type OrchestraResponse = {
 
 const ARTIFACT_VERIFIED_POV_DELTA = 10;
 
+function buildRollingSummary(
+  directorPrompt: string,
+  verification: Verdict,
+  mode?: string
+): string {
+  const clipped =
+    directorPrompt.length > 110 ? `${directorPrompt.slice(0, 107).trim()}…` : directorPrompt.trim();
+  const modeLabel = mode ? `${mode} · ` : '';
+  if (verification.pov_eligible) {
+    return `${modeLabel}Latest: “${clipped}” — verified · ${verification.score ?? '—'}/100`;
+  }
+  if (typeof verification.score === 'number' && verification.score >= 70) {
+    return `${modeLabel}Latest: “${clipped}” — strong progress · ${verification.score}/100`;
+  }
+  if (typeof verification.score === 'number') {
+    return `${modeLabel}Latest: “${clipped}” — ${verification.score}/100 · not yet verified`;
+  }
+  return `${modeLabel}Latest: “${clipped}”`;
+}
+
 export async function POST(request: NextRequest) {
   const body = await request.json();
   const directorPrompt: string = body.director_prompt;
@@ -110,8 +130,14 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'orchestra_unavailable', detail }, { status: 502 });
   }
 
-  const { turns, verification, artifact_content: artifactContent } =
-    (await response.json()) as OrchestraResponse;
+  const {
+    turns,
+    verification,
+    artifact_content: artifactContent,
+    mode: responseMode,
+  } = (await response.json()) as OrchestraResponse;
+
+  const effectiveMode = responseMode ?? mode;
 
   const admin = createAdminClient();
   const { data: insertedTurns, error: agentTurnsError } = await admin
@@ -166,5 +192,9 @@ export async function POST(request: NextRequest) {
     });
   }
 
-  return NextResponse.json({ turns, verification, mode });
+  // Keep the pod's rolling summary alive so Workspace and headers reflect real work.
+  const rollingSummary = buildRollingSummary(directorPrompt, verification, effectiveMode);
+  await admin.from('mini_pods').update({ rolling_summary: rollingSummary }).eq('id', podId);
+
+  return NextResponse.json({ turns, verification, mode: effectiveMode, rolling_summary: rollingSummary });
 }
