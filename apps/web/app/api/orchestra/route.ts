@@ -39,12 +39,34 @@ function buildRollingSummary(
   return `${modeLabel}Latest: “${clipped}”`;
 }
 
+function sanitizeReferenceUrl(raw: unknown): string | null {
+  if (typeof raw !== 'string') return null;
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  try {
+    const url = new URL(trimmed);
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
+    return url.toString().slice(0, 500);
+  } catch {
+    return null;
+  }
+}
+
+function buildDirectorMeta(note: string, referenceUrl: string | null): string | null {
+  const parts: string[] = [];
+  if (note.trim()) parts.push(`NOTE: ${note.trim().slice(0, 800)}`);
+  if (referenceUrl) parts.push(`REF: ${referenceUrl}`);
+  return parts.length ? parts.join('\n') : null;
+}
+
 export async function POST(request: NextRequest) {
   const body = await request.json();
   const directorPrompt: string = body.director_prompt;
   const podId: string = body.pod_id;
   const priorContext: string = body.prior_context ?? '';
   const mode: string = body.mode ?? 'construct';
+  const directorNote: string = typeof body.director_note === 'string' ? body.director_note : '';
+  const referenceUrl = sanitizeReferenceUrl(body.reference_url);
 
   const supabase = createClient();
 
@@ -104,6 +126,16 @@ export async function POST(request: NextRequest) {
   const senderLabel =
     profile?.display_name?.trim() || user.email?.split('@')[0] || 'Director';
 
+  const directorMeta = buildDirectorMeta(directorNote, referenceUrl);
+
+  // Fold note/reference into prior_context so the orchestra can use them
+  let enrichedContext = priorContext;
+  if (directorMeta) {
+    enrichedContext = enrichedContext
+      ? `${enrichedContext}\n\n---\n\nDirector-supplied context:\n${directorMeta}`
+      : `Director-supplied context:\n${directorMeta}`;
+  }
+
   const { count } = await supabase
     .from('pod_turns')
     .select('id', { count: 'exact', head: true })
@@ -116,6 +148,7 @@ export async function POST(request: NextRequest) {
     summary_conclusion: directorPrompt,
     turn_sequence: nextSequence,
     sender_label: senderLabel.slice(0, 40),
+    collapsed_reasoning: directorMeta,
   });
   if (directorTurnError) {
     return NextResponse.json(
@@ -130,7 +163,7 @@ export async function POST(request: NextRequest) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       director_prompt: directorPrompt,
-      prior_context: priorContext || undefined,
+      prior_context: enrichedContext || undefined,
       mode,
     }),
   });
@@ -211,5 +244,7 @@ export async function POST(request: NextRequest) {
     mode: effectiveMode,
     rolling_summary: rollingSummary,
     director_label: senderLabel,
+    director_note: directorNote.trim().slice(0, 800) || null,
+    reference_url: referenceUrl,
   });
 }
