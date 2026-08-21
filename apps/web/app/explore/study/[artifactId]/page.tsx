@@ -35,28 +35,44 @@ export default async function PublicStudyPage({ params }: { params: { artifactId
         <p className="text-sm uppercase tracking-widest text-calm-muted">
           Brainpod public commons · {category?.display_name ?? pod.category_slug}
         </p>
-        <h1 className="text-3xl font-medium text-calm-text">Released study</h1>
+        <h1 className="text-2xl font-medium leading-snug text-calm-text">
+          {artifact.question ?? 'Released study'}
+        </h1>
         <p className="text-sm text-calm-muted">From {pod.name}</p>
       </header>
+
       <section className="space-y-4 rounded-lg border border-calm-border bg-calm-surface p-6">
-        <h2 className="text-lg font-medium text-calm-text">Question</h2>
-        <p className="text-sm leading-relaxed text-calm-muted">{artifact.question}</p>
-        <h2 className="pt-4 text-lg font-medium text-calm-text">
-          {artifact.public_summary_source === 'system_generated'
-            ? 'System-generated summary'
-            : 'Owner-authored summary'}
-        </h2>
-        <p className="text-sm leading-relaxed text-calm-muted">{artifact.public_summary}</p>
-        <p className="text-xs leading-relaxed text-calm-muted">
-          This summary is separate from @Veritas&apos;s artifact verdict and must not be read as
-          independently verified. Future system-generated summaries will carry their own provenance.
-        </p>
-        <p className={artifact.is_verified ? 'text-sm text-calm-accent' : 'text-sm text-calm-muted'}>
-          {artifact.is_verified
-            ? `Verified · ${artifact.veritas_score ?? '—'}/100`
-            : 'Released for observation · not verified'}
-        </p>
+        <div>
+          <h2 className="text-sm font-medium text-calm-text">Director summary</h2>
+          <p className="mt-2 text-sm leading-relaxed text-calm-muted">
+            {artifact.public_summary ?? 'No public summary was provided.'}
+          </p>
+          <p className="mt-3 text-xs leading-relaxed text-calm-muted">
+            This is an owner-authored release note. It is separate from @Veritas’s verification verdict
+            and should not be read as independently verified evidence.
+          </p>
+        </div>
+
+        <div className="border-t border-calm-border pt-4">
+          <p
+            className={
+              artifact.is_verified ? 'text-sm text-calm-accent' : 'text-sm text-calm-muted'
+            }
+          >
+            {artifact.is_verified
+              ? `Verified · ${artifact.veritas_score ?? '—'}/100`
+              : typeof artifact.veritas_score === 'number'
+                ? `Released for observation · score ${artifact.veritas_score}/100 · not verified`
+                : 'Released for observation · not verified'}
+          </p>
+        </div>
       </section>
+
+      <p className="text-xs text-calm-muted">
+        Public discussion and co-contribution on released studies will open in a later phase. For now
+        this surface is for calm observation of what Directors chose to share.
+      </p>
+
       <div className="flex flex-wrap gap-4 text-sm text-calm-muted">
         <Link href="/explore" className="underline hover:text-calm-text">
           Back to Explore
@@ -67,6 +83,7 @@ export default async function PublicStudyPage({ params }: { params: { artifactId
           </Link>
         )}
       </div>
+
       <SiteFooter />
     </main>
   );

@@ -159,6 +159,7 @@ export async function POST(request: NextRequest) {
   }
 
   const constructTurn = insertedTurns?.find((t) => t.sender_id === AGENT_PROFILE_IDS.synthetix);
+  // Leave public_summary empty until the Director writes a distinct release summary.
   const { data: artifact, error: artifactError } = await admin
     .from('artifacts')
     .insert({
@@ -168,7 +169,7 @@ export async function POST(request: NextRequest) {
       type: 'structured_analysis',
       content: artifactContent,
       question: directorPrompt,
-      public_summary: `${directorPrompt} — verification score ${verification.score ?? 'pending'}/100.`,
+      public_summary: null,
       veritas_score: verification.score,
       is_verified: verification.pov_eligible,
     })
@@ -192,7 +193,6 @@ export async function POST(request: NextRequest) {
     });
   }
 
-  // Keep the pod's rolling summary alive so Workspace and headers reflect real work.
   const rollingSummary = buildRollingSummary(directorPrompt, verification, effectiveMode);
   await admin.from('mini_pods').update({ rolling_summary: rollingSummary }).eq('id', podId);
 

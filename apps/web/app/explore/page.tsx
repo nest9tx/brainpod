@@ -3,6 +3,12 @@ import { createClient } from '@/lib/supabase/server';
 import SiteNav from '@/components/site-nav';
 import SiteFooter from '@/components/site-footer';
 
+function clip(text: string, max: number) {
+  const t = text.trim();
+  if (t.length <= max) return t;
+  return `${t.slice(0, max - 1).trim()}…`;
+}
+
 export default async function ExplorePage() {
   const supabase = createClient();
   const {
@@ -22,12 +28,21 @@ export default async function ExplorePage() {
     .eq('public_release', true)
     .not('question', 'is', null)
     .order('created_at', { ascending: false });
+
   const studyByQuestion = new Map<string, NonNullable<typeof rawStudies>[number]>();
   for (const study of rawStudies ?? []) {
     const key = study.question?.trim().toLowerCase() ?? study.id;
     if (!studyByQuestion.has(key)) studyByQuestion.set(key, study);
   }
   const studies = [...studyByQuestion.values()];
+
+  const categoriesWithWork =
+    categories?.filter((category) =>
+      studies.some((study) => {
+        const pod = study.mini_pods as unknown as { category_slug: string };
+        return pod.category_slug === category.slug;
+      })
+    ) ?? [];
 
   return (
     <main className="mx-auto flex min-h-screen max-w-4xl flex-col gap-10 px-6 py-16">
@@ -37,59 +52,62 @@ export default async function ExplorePage() {
         <p className="text-sm uppercase tracking-widest text-calm-muted">Brainpod public commons</p>
         <h1 className="text-3xl font-medium text-calm-text">Explore released work</h1>
         <p className="max-w-2xl text-sm leading-relaxed text-calm-muted">
-          These are public Mini-Pods whose owners chose to release their summaries for observation.
-          Private pod histories remain private until their owners publish them.
+          Short public summaries chosen by Directors. Private pod histories stay private until their
+          owners release them. Interaction on released studies will grow later; for now this is a calm
+          observation surface.
         </p>
       </header>
 
-      <section className="space-y-8" aria-label="Public Mini-Pods by category">
-        {categories?.map((category) => {
-          const categoryStudies =
-            studies?.filter((study) => {
+      {categoriesWithWork.length === 0 ? (
+        <p className="text-sm text-calm-muted">No released studies yet.</p>
+      ) : (
+        <section className="space-y-8" aria-label="Released studies by category">
+          {categoriesWithWork.map((category) => {
+            const categoryStudies = studies.filter((study) => {
               const pod = study.mini_pods as unknown as { category_slug: string };
               return pod.category_slug === category.slug;
-            }) ?? [];
-          return (
-            <section key={category.slug} className="space-y-3">
-              <div>
-                <h2 className="text-lg font-medium text-calm-text">{category.display_name}</h2>
-                {category.description && (
-                  <p className="mt-1 text-sm text-calm-muted">{category.description}</p>
-                )}
-              </div>
-              {categoryStudies.length > 0 ? (
+            });
+            return (
+              <section key={category.slug} className="space-y-3">
+                <div>
+                  <h2 className="text-lg font-medium text-calm-text">{category.display_name}</h2>
+                  {category.description && (
+                    <p className="mt-1 text-sm text-calm-muted">{category.description}</p>
+                  )}
+                </div>
                 <div className="grid gap-3 sm:grid-cols-2">
                   {categoryStudies.map((study) => {
                     const pod = study.mini_pods as unknown as { name: string };
+                    const title = clip(study.question ?? 'Released study', 140);
+                    const summary = study.public_summary
+                      ? clip(study.public_summary, 180)
+                      : null;
                     return (
                       <Link
                         key={study.id}
                         href={`/explore/study/${study.id}`}
                         className="block rounded-lg border border-calm-border bg-calm-surface p-4 transition-colors hover:border-calm-accent"
                       >
-                        <h3 className="font-medium text-calm-text">
-                          {study.question ?? 'Released study'}
-                        </h3>
-                        <p className="mt-2 text-sm leading-relaxed text-calm-muted">
-                          {study.public_summary}
-                        </p>
-                        <p className="mt-3 text-xs uppercase tracking-wide text-calm-accent">
-                          View study · {pod.name} ·{' '}
+                        <h3 className="text-sm font-medium leading-snug text-calm-text">{title}</h3>
+                        {summary && (
+                          <p className="mt-2 text-sm leading-relaxed text-calm-muted">{summary}</p>
+                        )}
+                        <p className="mt-3 text-xs text-calm-muted">
+                          {pod.name}
+                          {' · '}
                           {study.is_verified
-                            ? `${study.veritas_score ?? '—'}/100`
-                            : 'observation'}
+                            ? `Verified · ${study.veritas_score ?? '—'}/100`
+                            : 'Released for observation'}
                         </p>
                       </Link>
                     );
                   })}
                 </div>
-              ) : (
-                <p className="text-sm text-calm-muted">No released pods in this category yet.</p>
-              )}
-            </section>
-          );
-        })}
-      </section>
+              </section>
+            );
+          })}
+        </section>
+      )}
 
       <SiteFooter />
     </main>
