@@ -21,6 +21,8 @@ type Cycle = {
   turns: SwarmTurn[];
   verdict?: Verdict | null;
   mode?: WorkMode;
+  directorNote?: string | null;
+  referenceUrl?: string | null;
 };
 
 type OrientationPodProps = {
@@ -28,7 +30,13 @@ type OrientationPodProps = {
   podName: string;
   podSummary: string;
   initialRemainingPrompts: number;
-  initialCycles: { question: string; turns: SwarmTurn[]; directorLabel?: string }[];
+  initialCycles: {
+    question: string;
+    turns: SwarmTurn[];
+    directorLabel?: string;
+    directorNote?: string | null;
+    referenceUrl?: string | null;
+  }[];
   userEmail: string;
   currentDirectorLabel?: string;
 };
@@ -60,6 +68,8 @@ function formatCyclePlainText(cycle: Cycle, podName: string): string {
     '',
     'Director question:',
     cycle.question,
+    cycle.directorNote ? `\nDirector note:\n${cycle.directorNote}` : null,
+    cycle.referenceUrl ? `\nReference: ${cycle.referenceUrl}` : null,
     '',
   ].filter((line) => line !== null) as string[];
 
@@ -70,24 +80,39 @@ function formatCyclePlainText(cycle: Cycle, podName: string): string {
   }
 
   lines.push('---');
-  lines.push('Shared from Brainpod (LuminaNova.org 501(c)(3)). Attribution is collective; not independently verified evidence solely because it was copied.');
+  lines.push(
+    'Shared from Brainpod (LuminaNova.org 501(c)(3)). Attribution is collective; not independently verified evidence solely because it was copied.'
+  );
   return lines.join('\n');
 }
 
-function buildPriorContextFromCycle(cycle: Cycle, directorNote?: string): string {
+function buildPriorContextFromCycle(
+  cycle: Cycle,
+  directorNote?: string,
+  referenceUrl?: string
+): string {
   const agentBits = cycle.turns
     .map((t) => `${t.agent}: ${t.summary_conclusion.slice(0, 600)}`)
     .join('\n');
   const directorName = cycle.directorLabel ?? 'Director';
   let context = `${directorName}: ${cycle.question}\n${agentBits}`;
+  if (cycle.directorNote) context += `\nDirector note (prior): ${cycle.directorNote}`;
+  if (cycle.referenceUrl) context += `\nReference (prior): ${cycle.referenceUrl}`;
   if (directorNote?.trim()) {
     context += `\n\n---\n\nDirector note / additional context for this continuation:\n${directorNote.trim()}`;
+  }
+  if (referenceUrl?.trim()) {
+    context += `\nReference for this continuation: ${referenceUrl.trim()}`;
   }
   return context;
 }
 
-function buildPriorContext(cycles: Cycle[], directorNote?: string): string {
-  if (cycles.length === 0 && !directorNote?.trim()) return '';
+function buildPriorContext(
+  cycles: Cycle[],
+  directorNote?: string,
+  referenceUrl?: string
+): string {
+  if (cycles.length === 0 && !directorNote?.trim() && !referenceUrl?.trim()) return '';
   const chronological = [...cycles].reverse();
   const history = chronological
     .map((c) => {
@@ -95,14 +120,21 @@ function buildPriorContext(cycles: Cycle[], directorNote?: string): string {
         .map((t) => `${t.agent}: ${t.summary_conclusion.slice(0, 500)}`)
         .join('\n');
       const directorName = c.directorLabel ?? 'Director';
-      return `${directorName}: ${c.question}\n${agentBits}`;
+      let block = `${directorName}: ${c.question}\n${agentBits}`;
+      if (c.directorNote) block += `\nDirector note: ${c.directorNote}`;
+      if (c.referenceUrl) block += `\nReference: ${c.referenceUrl}`;
+      return block;
     })
     .join('\n\n---\n\n');
 
+  let extra = history;
   if (directorNote?.trim()) {
-    return `${history}\n\n---\n\nDirector note / additional context for this continuation:\n${directorNote.trim()}`;
+    extra += `\n\n---\n\nDirector note / additional context for this continuation:\n${directorNote.trim()}`;
   }
-  return history;
+  if (referenceUrl?.trim()) {
+    extra += `\nReference for this continuation: ${referenceUrl.trim()}`;
+  }
+  return extra;
 }
 
 const MODE_OPTIONS: { id: WorkMode; label: string; description: string }[] = [
@@ -221,6 +253,7 @@ export default function OrientationPod({
 }: OrientationPodProps) {
   const [directorPrompt, setDirectorPrompt] = useState('');
   const [directorNote, setDirectorNote] = useState('');
+  const [referenceUrl, setReferenceUrl] = useState('');
   const [mode, setMode] = useState<WorkMode>('construct');
   const [liveSummary, setLiveSummary] = useState(podSummary);
   const [cycles, setCycles] = useState<Cycle[]>(
@@ -254,12 +287,21 @@ export default function OrientationPod({
     let priorContext = '';
     if (isFollowUp && cycles.length > 0) {
       if (resumeCycleIndex !== null && cycles[resumeCycleIndex]) {
-        priorContext = buildPriorContextFromCycle(cycles[resumeCycleIndex], directorNote);
+        priorContext = buildPriorContextFromCycle(
+          cycles[resumeCycleIndex],
+          directorNote,
+          referenceUrl
+        );
       } else {
-        priorContext = buildPriorContext(cycles, directorNote);
+        priorContext = buildPriorContext(cycles, directorNote, referenceUrl);
       }
-    } else if (directorNote.trim()) {
-      priorContext = `Director note / additional context:\n${directorNote.trim()}`;
+    } else if (directorNote.trim() || referenceUrl.trim()) {
+      priorContext = [
+        directorNote.trim() && `Director note / additional context:\n${directorNote.trim()}`,
+        referenceUrl.trim() && `Reference: ${referenceUrl.trim()}`,
+      ]
+        .filter(Boolean)
+        .join('\n');
     }
 
     try {
@@ -271,6 +313,8 @@ export default function OrientationPod({
           pod_id: podId,
           prior_context: priorContext || undefined,
           mode,
+          director_note: directorNote.trim() || undefined,
+          reference_url: referenceUrl.trim() || undefined,
         }),
       });
 
@@ -295,6 +339,8 @@ export default function OrientationPod({
           turns: data.turns ?? [],
           verdict: data.verification ?? null,
           mode: (data.mode as WorkMode) ?? mode,
+          directorNote: data.director_note ?? (directorNote.trim() || null),
+          referenceUrl: data.reference_url ?? (referenceUrl.trim() || null),
         },
         ...prev,
       ]);
@@ -306,6 +352,7 @@ export default function OrientationPod({
       setPendingQuestion(null);
       setDirectorPrompt('');
       setDirectorNote('');
+      setReferenceUrl('');
       setIsFollowUp(true);
       setRemainingPrompts((n) => Math.max(n - 1, 0));
       setStatus('idle');
@@ -320,6 +367,7 @@ export default function OrientationPod({
     setResumeCycleIndex(null);
     setDirectorPrompt('');
     setDirectorNote('');
+    setReferenceUrl('');
   }
 
   function continueFromCycle(index: number) {
@@ -328,6 +376,7 @@ export default function OrientationPod({
     setExpandedCycle(index);
     setDirectorPrompt('');
     setDirectorNote('');
+    setReferenceUrl('');
     if (typeof window !== 'undefined') {
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
@@ -342,7 +391,6 @@ export default function OrientationPod({
       setCopiedIndex(index);
       window.setTimeout(() => setCopiedIndex((current) => (current === index ? null : current)), 2000);
     } catch {
-      // Fallback for older browsers
       window.prompt('Copy this study thread:', text);
     }
   }
@@ -453,19 +501,38 @@ export default function OrientationPod({
           onChange={(e) => setDirectorPrompt(e.target.value)}
         />
 
-        <div className="space-y-1">
-          <label htmlFor="director-note" className="text-xs text-calm-muted">
-            Optional note or reference (short)
-          </label>
-          <textarea
-            id="director-note"
-            className="w-full rounded-lg border border-calm-border/70 bg-calm-bg/40 p-2.5 text-xs text-calm-text placeholder:text-calm-muted/70 focus:border-calm-accent focus:outline-none"
-            rows={2}
-            placeholder="e.g. constraint, prior decision, link, or brief clarification for the swarm…"
-            value={directorNote}
-            onChange={(e) => setDirectorNote(e.target.value)}
-            maxLength={800}
-          />
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="space-y-1">
+            <label htmlFor="director-note" className="text-xs text-calm-muted">
+              Optional note (short)
+            </label>
+            <textarea
+              id="director-note"
+              className="w-full rounded-lg border border-calm-border/70 bg-calm-bg/40 p-2.5 text-xs text-calm-text placeholder:text-calm-muted/70 focus:border-calm-accent focus:outline-none"
+              rows={2}
+              placeholder="Constraint, prior decision, or brief clarification…"
+              value={directorNote}
+              onChange={(e) => setDirectorNote(e.target.value)}
+              maxLength={800}
+            />
+          </div>
+          <div className="space-y-1">
+            <label htmlFor="reference-url" className="text-xs text-calm-muted">
+              Optional reference link
+            </label>
+            <input
+              id="reference-url"
+              type="url"
+              className="w-full rounded-lg border border-calm-border/70 bg-calm-bg/40 p-2.5 text-xs text-calm-text placeholder:text-calm-muted/70 focus:border-calm-accent focus:outline-none"
+              placeholder="https://…"
+              value={referenceUrl}
+              onChange={(e) => setReferenceUrl(e.target.value)}
+              maxLength={500}
+            />
+            <p className="text-[11px] text-calm-muted">
+              Public http(s) URL only. File uploads come later.
+            </p>
+          </div>
         </div>
 
         <p className="text-xs text-calm-muted">
@@ -546,6 +613,7 @@ export default function OrientationPod({
                   <p className="mt-1 text-xs text-calm-muted">
                     {cycle.mode ? `${cycle.mode} · ` : ''}
                     {cycle.turns.map((t) => t.agent).join(' → ')}
+                    {cycle.referenceUrl ? ' · has reference' : ''}
                     {isActiveResume ? ' · continuing' : ''}
                   </p>
                 </button>
@@ -593,6 +661,23 @@ export default function OrientationPod({
                     <p className="mt-1.5 text-sm leading-relaxed text-calm-text whitespace-pre-wrap">
                       {cycle.question}
                     </p>
+                    {cycle.directorNote && (
+                      <p className="mt-2 text-xs text-calm-muted whitespace-pre-wrap">
+                        Note: {cycle.directorNote}
+                      </p>
+                    )}
+                    {cycle.referenceUrl && (
+                      <p className="mt-1 text-xs">
+                        <a
+                          href={cycle.referenceUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-calm-accent underline hover:text-calm-text"
+                        >
+                          Reference link
+                        </a>
+                      </p>
+                    )}
                   </div>
                   {cycle.turns.map((turn, j) => (
                     <AgentTurn key={j} turn={turn} />
