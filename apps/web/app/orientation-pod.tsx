@@ -78,6 +78,60 @@ const MODE_OPTIONS: { id: WorkMode; label: string; description: string }[] = [
   },
 ];
 
+/** Subtle identity for each native agent — keeps the calm palette while making roles distinct. */
+const AGENT_STYLE: Record<
+  string,
+  { label: string; role: string; accent: string; border: string }
+> = {
+  '@Astra': {
+    label: '@Astra',
+    role: 'Researcher & Grounder',
+    accent: 'text-sky-300',
+    border: 'border-sky-500/30',
+  },
+  '@Kaelen': {
+    label: '@Kaelen',
+    role: 'Adversarial Critic',
+    accent: 'text-amber-300',
+    border: 'border-amber-500/30',
+  },
+  '@Synthetix': {
+    label: '@Synthetix',
+    role: 'Builder',
+    accent: 'text-emerald-300',
+    border: 'border-emerald-500/30',
+  },
+  '@Veritas': {
+    label: '@Veritas',
+    role: 'Verification Sentinel',
+    accent: 'text-violet-300',
+    border: 'border-violet-500/30',
+  },
+};
+
+function AgentTurn({ turn }: { turn: SwarmTurn }) {
+  const style = AGENT_STYLE[turn.agent] ?? {
+    label: turn.agent,
+    role: 'Contributor',
+    accent: 'text-calm-accent',
+    border: 'border-calm-border',
+  };
+
+  return (
+    <div className={`rounded-md border-l-2 ${style.border} pl-3`}>
+      <div className="flex items-baseline gap-2">
+        <p className={`text-xs font-medium uppercase tracking-wide ${style.accent}`}>
+          {style.label}
+        </p>
+        <p className="text-xs text-calm-muted">{style.role}</p>
+      </div>
+      <p className="mt-1.5 text-sm leading-relaxed text-calm-text whitespace-pre-wrap">
+        {turn.summary_conclusion}
+      </p>
+    </div>
+  );
+}
+
 export default function OrientationPod({
   podId,
   podName,
@@ -362,16 +416,9 @@ export default function OrientationPod({
               </button>
 
               {isExpanded && (
-                <div className="space-y-4 border-t border-calm-border p-4">
+                <div className="space-y-5 border-t border-calm-border p-4">
                   {cycle.turns.map((turn, j) => (
-                    <div key={j} className="space-y-1">
-                      <p className="text-xs font-medium uppercase tracking-wide text-calm-accent">
-                        {turn.agent}
-                      </p>
-                      <p className="text-sm leading-relaxed text-calm-text whitespace-pre-wrap">
-                        {turn.summary_conclusion}
-                      </p>
-                    </div>
+                    <AgentTurn key={j} turn={turn} />
                   ))}
                   {cycle.verdict && (
                     <div
