@@ -7,7 +7,7 @@ import PublicHome from './public-home';
 const FREE_TIER_DAILY_LIMIT = 5;
 const TURNS_PER_CYCLE = 5;
 
-const AGENT_ID_SET = new Set(Object.values(AGENT_PROFILE_IDS));
+const AGENT_ID_SET: Set<string> = new Set(Object.values(AGENT_PROFILE_IDS));
 
 async function importLegacyTurns(admin: ReturnType<typeof createAdminClient>, userId: string, podId: string) {
   const { count: privateTurnCount } = await admin
@@ -114,7 +114,6 @@ export default async function Home({ searchParams }: { searchParams: { pod?: str
   let pod: { id: string; name: string; rolling_summary: string } | null = null;
 
   if (searchParams.pod) {
-    // Owner path
     const { data: owned } = await supabase
       .from('mini_pods')
       .select('id, name, rolling_summary')
@@ -124,7 +123,6 @@ export default async function Home({ searchParams }: { searchParams: { pod?: str
     if (owned) {
       pod = owned;
     } else {
-      // Shared collaborator path
       const { data: access } = await admin
         .from('private_pod_permissions')
         .select('pod_id')
@@ -182,7 +180,6 @@ export default async function Home({ searchParams }: { searchParams: { pod?: str
 
   await importLegacyTurns(admin, user.id, pod.id);
 
-  // Ensure this user has a readable display name for multi-human rooms
   await admin.from('profiles').upsert(
     {
       id: user.id,
