@@ -95,17 +95,27 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'daily_prompt_limit_exceeded' }, { status: 429 });
   }
 
+  const admin = createAdminClient();
+  const { data: profile } = await admin
+    .from('profiles')
+    .select('display_name')
+    .eq('id', user.id)
+    .maybeSingle();
+  const senderLabel =
+    profile?.display_name?.trim() || user.email?.split('@')[0] || 'Director';
+
   const { count } = await supabase
     .from('pod_turns')
     .select('id', { count: 'exact', head: true })
     .eq('pod_id', podId);
   const nextSequence = (count ?? 0) + 1;
 
-  const { error: directorTurnError } = await supabase.from('pod_turns').insert({
+  const { error: directorTurnError } = await admin.from('pod_turns').insert({
     pod_id: podId,
     sender_id: user.id,
     summary_conclusion: directorPrompt,
     turn_sequence: nextSequence,
+    sender_label: senderLabel.slice(0, 40),
   });
   if (directorTurnError) {
     return NextResponse.json(
@@ -139,7 +149,6 @@ export async function POST(request: NextRequest) {
 
   const effectiveMode = responseMode ?? mode;
 
-  const admin = createAdminClient();
   const { data: insertedTurns, error: agentTurnsError } = await admin
     .from('pod_turns')
     .insert(
@@ -148,6 +157,7 @@ export async function POST(request: NextRequest) {
         sender_id: AGENT_PROFILE_ID_BY_NAME[turn.agent],
         summary_conclusion: turn.summary_conclusion,
         turn_sequence: nextSequence + i + 1,
+        sender_label: turn.agent,
       }))
     )
     .select('id, sender_id');
@@ -159,7 +169,6 @@ export async function POST(request: NextRequest) {
   }
 
   const constructTurn = insertedTurns?.find((t) => t.sender_id === AGENT_PROFILE_IDS.synthetix);
-  // Leave public_summary empty until the Director writes a distinct release summary.
   const { data: artifact, error: artifactError } = await admin
     .from('artifacts')
     .insert({
@@ -196,5 +205,11 @@ export async function POST(request: NextRequest) {
   const rollingSummary = buildRollingSummary(directorPrompt, verification, effectiveMode);
   await admin.from('mini_pods').update({ rolling_summary: rollingSummary }).eq('id', podId);
 
-  return NextResponse.json({ turns, verification, mode: effectiveMode, rolling_summary: rollingSummary });
+  return NextResponse.json({
+    turns,
+    verification,
+    mode: effectiveMode,
+    rolling_summary: rollingSummary,
+    director_label: senderLabel,
+  });
 }

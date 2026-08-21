@@ -43,7 +43,28 @@ export async function PATCH(request: NextRequest) {
     );
   }
 
+  // Block names that only differ by case from another human profile
   const admin = createAdminClient();
+  const { data: collision } = await admin
+    .from('profiles')
+    .select('id, display_name')
+    .ilike('display_name', raw)
+    .neq('id', user.id)
+    .in('role', ['free_public', 'sustaining_member', 'institutional_partner'])
+    .limit(1)
+    .maybeSingle();
+
+  if (collision) {
+    return NextResponse.json(
+      {
+        error: 'display_name_taken',
+        detail:
+          'That display name is already in use (names are unique regardless of capitalization). Choose another.',
+      },
+      { status: 409 }
+    );
+  }
+
   const { data: profile, error } = await admin
     .from('profiles')
     .upsert(
@@ -57,7 +78,18 @@ export async function PATCH(request: NextRequest) {
     .single();
 
   if (error || !profile) {
-    return NextResponse.json({ error: 'profile_update_failed', detail: error?.message }, { status: 500 });
+    const detail = error?.message ?? '';
+    if (detail.includes('idx_profiles_display_name_lower') || detail.includes('duplicate')) {
+      return NextResponse.json(
+        {
+          error: 'display_name_taken',
+          detail:
+            'That display name is already in use (names are unique regardless of capitalization). Choose another.',
+        },
+        { status: 409 }
+      );
+    }
+    return NextResponse.json({ error: 'profile_update_failed', detail }, { status: 500 });
   }
 
   return NextResponse.json({ profile });

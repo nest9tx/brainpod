@@ -31,7 +31,9 @@ export default function DisplayNameEditor({
     }
     setName(data.profile.display_name);
     setStatus('saved');
-    setMessage('Display name updated. New directed work will show this name.');
+    setMessage(
+      'Display name updated. New directed work will use this name. Earlier turns keep the name that was set when they were written.'
+    );
   }
 
   return (
@@ -39,8 +41,10 @@ export default function DisplayNameEditor({
       <div className="space-y-1">
         <h2 className="text-sm font-medium text-calm-text">Director display name</h2>
         <p className="text-xs text-calm-muted">
-          Shown on questions you direct in shared pods so collaborators can see who asked what.
-          Account email stays private to auth.
+          Shown on questions you direct in shared pods. Names are unique regardless of
+          capitalization (Admin and admin are the same). Prefer a stable name — frequent changes
+          make it harder for collaborators to recognize your contributions. Account email stays
+          private to auth.
         </p>
       </div>
       <div className="flex flex-wrap gap-2">
