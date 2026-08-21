@@ -208,9 +208,7 @@ export default function OrientationPod({
     'idle' | 'thinking' | 'error' | 'limit_reached' | 'duplicate'
   >('idle');
   const [remainingPrompts, setRemainingPrompts] = useState(initialRemainingPrompts);
-  // Resume the latest thread when returning to a pod that already has history
   const [isFollowUp, setIsFollowUp] = useState(initialCycles.length > 0);
-  // Which cycle is the active continuation target (null = newest / full recent history)
   const [resumeCycleIndex, setResumeCycleIndex] = useState<number | null>(
     initialCycles.length > 0 ? 0 : null
   );
@@ -223,7 +221,6 @@ export default function OrientationPod({
     let priorContext = '';
     if (isFollowUp && cycles.length > 0) {
       if (resumeCycleIndex !== null && cycles[resumeCycleIndex]) {
-        // Continue from a specific prior cycle
         priorContext = buildPriorContextFromCycle(cycles[resumeCycleIndex], directorNote);
       } else {
         priorContext = buildPriorContext(cycles, directorNote);
@@ -294,7 +291,6 @@ export default function OrientationPod({
     setExpandedCycle(index);
     setDirectorPrompt('');
     setDirectorNote('');
-    // Scroll toward the composer
     if (typeof window !== 'undefined') {
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
@@ -486,6 +482,13 @@ export default function OrientationPod({
           </article>
         )}
 
+        {cycles.length > 0 && (
+          <p className="text-xs text-calm-muted">
+            Prior work in this pod. Use <span className="text-calm-text">Continue</span> on any
+            item to resume that thread, or start a fresh question above.
+          </p>
+        )}
+
         {cycles.map((cycle, i) => {
           const isExpanded = expandedCycle === i;
           const isActiveResume = isFollowUp && resumeCycleIndex === i;
@@ -496,28 +499,41 @@ export default function OrientationPod({
                 isActiveResume ? 'border-calm-accent/50' : 'border-calm-border'
               }`}
             >
-              <button
-                onClick={() => setExpandedCycle(isExpanded ? null : i)}
-                className="flex w-full items-start justify-between gap-3 p-4 text-left"
-              >
-                <div className="space-y-1">
+              <div className="flex items-start gap-3 p-4">
+                <button
+                  onClick={() => setExpandedCycle(isExpanded ? null : i)}
+                  className="min-w-0 flex-1 text-left"
+                >
                   <p className="text-sm text-calm-text">{cycle.question}</p>
-                  <p className="text-xs text-calm-muted">
+                  <p className="mt-1 text-xs text-calm-muted">
                     {cycle.mode ? `${cycle.mode} · ` : ''}
                     {cycle.turns.map((t) => t.agent).join(' → ')}
                     {isActiveResume ? ' · continuing' : ''}
                   </p>
+                </button>
+                <div className="flex shrink-0 flex-col items-end gap-2">
+                  <span
+                    className={`rounded-full border px-2 py-0.5 text-xs ${
+                      cycle.verdict?.pov_eligible
+                        ? 'border-calm-accent text-calm-accent'
+                        : 'border-calm-border text-calm-muted'
+                    }`}
+                  >
+                    {cycle.verdict ? `${cycle.verdict.score ?? '—'}/100` : '…'}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => continueFromCycle(i)}
+                    className={`text-xs underline ${
+                      isActiveResume
+                        ? 'text-calm-accent'
+                        : 'text-calm-muted hover:text-calm-text'
+                    }`}
+                  >
+                    {isActiveResume ? 'Continuing' : 'Continue'}
+                  </button>
                 </div>
-                <span
-                  className={`shrink-0 rounded-full border px-2 py-0.5 text-xs ${
-                    cycle.verdict?.pov_eligible
-                      ? 'border-calm-accent text-calm-accent'
-                      : 'border-calm-border text-calm-muted'
-                  }`}
-                >
-                  {cycle.verdict ? `${cycle.verdict.score ?? '—'}/100` : '…'}
-                </span>
-              </button>
+              </div>
 
               {isExpanded && (
                 <div className="space-y-5 border-t border-calm-border p-4">
@@ -525,15 +541,6 @@ export default function OrientationPod({
                     <AgentTurn key={j} turn={turn} />
                   ))}
                   {cycle.verdict && <ContributionNote verdict={cycle.verdict} />}
-                  <div className="pt-1">
-                    <button
-                      type="button"
-                      onClick={() => continueFromCycle(i)}
-                      className="text-xs text-calm-accent underline hover:text-calm-text"
-                    >
-                      {isActiveResume ? 'Continuing this thread' : 'Continue this thread'}
-                    </button>
-                  </div>
                 </div>
               )}
             </article>
