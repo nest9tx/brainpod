@@ -1,8 +1,14 @@
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/server';
+import SiteNav from '@/components/site-nav';
+import SiteFooter from '@/components/site-footer';
 
 export default async function ExplorePage() {
   const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
   const { data: categories } = await supabase
     .from('main_categories')
     .select('slug, display_name, description')
@@ -10,7 +16,9 @@ export default async function ExplorePage() {
 
   const { data: rawStudies } = await supabase
     .from('artifacts')
-    .select('id, question, public_summary, veritas_score, is_verified, mini_pods!inner(id, name, category_slug)')
+    .select(
+      'id, question, public_summary, veritas_score, is_verified, mini_pods!inner(id, name, category_slug)'
+    )
     .eq('public_release', true)
     .not('question', 'is', null)
     .order('created_at', { ascending: false });
@@ -23,24 +31,24 @@ export default async function ExplorePage() {
 
   return (
     <main className="mx-auto flex min-h-screen max-w-4xl flex-col gap-10 px-6 py-16">
+      <SiteNav variant={user ? 'app' : 'public'} userEmail={user?.email ?? undefined} />
+
       <header className="space-y-3">
         <p className="text-sm uppercase tracking-widest text-calm-muted">Brainpod public commons</p>
         <h1 className="text-3xl font-medium text-calm-text">Explore released work</h1>
         <p className="max-w-2xl text-sm leading-relaxed text-calm-muted">
-          These are public Mini-Pods whose owners chose to release their summaries for
-          observation. Private pod histories remain private until their owners publish them.
+          These are public Mini-Pods whose owners chose to release their summaries for observation.
+          Private pod histories remain private until their owners publish them.
         </p>
-        <Link href="/" className="inline-block text-sm text-calm-muted underline hover:text-calm-text">
-          Back to Brainpod home
-        </Link>
       </header>
 
       <section className="space-y-8" aria-label="Public Mini-Pods by category">
         {categories?.map((category) => {
-          const categoryStudies = studies?.filter((study) => {
-            const pod = study.mini_pods as unknown as { category_slug: string };
-            return pod.category_slug === category.slug;
-          }) ?? [];
+          const categoryStudies =
+            studies?.filter((study) => {
+              const pod = study.mini_pods as unknown as { category_slug: string };
+              return pod.category_slug === category.slug;
+            }) ?? [];
           return (
             <section key={category.slug} className="space-y-3">
               <div>
@@ -54,19 +62,24 @@ export default async function ExplorePage() {
                   {categoryStudies.map((study) => {
                     const pod = study.mini_pods as unknown as { name: string };
                     return (
-                    <Link
-                      key={study.id}
-                      href={`/explore/study/${study.id}`}
-                      className="block rounded-lg border border-calm-border bg-calm-surface p-4 transition-colors hover:border-calm-accent"
-                    >
-                      <h3 className="font-medium text-calm-text">{study.question ?? 'Released study'}</h3>
-                      <p className="mt-2 text-sm leading-relaxed text-calm-muted">
-                        {study.public_summary}
-                      </p>
-                      <p className="mt-3 text-xs uppercase tracking-wide text-calm-accent">
-                        View study · {pod.name} · {study.is_verified ? `${study.veritas_score ?? '—'}/100` : 'observation'}
-                      </p>
-                    </Link>
+                      <Link
+                        key={study.id}
+                        href={`/explore/study/${study.id}`}
+                        className="block rounded-lg border border-calm-border bg-calm-surface p-4 transition-colors hover:border-calm-accent"
+                      >
+                        <h3 className="font-medium text-calm-text">
+                          {study.question ?? 'Released study'}
+                        </h3>
+                        <p className="mt-2 text-sm leading-relaxed text-calm-muted">
+                          {study.public_summary}
+                        </p>
+                        <p className="mt-3 text-xs uppercase tracking-wide text-calm-accent">
+                          View study · {pod.name} ·{' '}
+                          {study.is_verified
+                            ? `${study.veritas_score ?? '—'}/100`
+                            : 'observation'}
+                        </p>
+                      </Link>
                     );
                   })}
                 </div>
@@ -78,11 +91,7 @@ export default async function ExplorePage() {
         })}
       </section>
 
-      <div className="flex gap-4 text-sm text-calm-muted">
-        <Link href="/" className="underline hover:text-calm-text">Brainpod home</Link>
-        <Link href="/login" className="underline hover:text-calm-text">Enter a pod</Link>
-        <Link href="/privacy" className="underline hover:text-calm-text">Privacy</Link>
-      </div>
+      <SiteFooter />
     </main>
   );
 }
