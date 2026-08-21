@@ -8,66 +8,85 @@ export default function PublicHome() {
       <SiteNav variant="public" />
 
       <header className="max-w-2xl space-y-4">
-        <p className="text-sm uppercase tracking-widest text-calm-muted">Brainpod</p>
-        <h1 className="text-3xl font-medium leading-tight text-calm-text">
+        <p className="text-sm uppercase tracking-widest text-calm-muted">Public-benefit application</p>
+        <h1 className="text-3xl font-medium leading-tight text-calm-text">Brainpod</h1>
+        <p className="text-lg leading-relaxed text-calm-text">
           A public-benefit application for human and AI co-creation.
-        </h1>
-        <p className="text-base leading-relaxed text-calm-muted">
-          Brainpod helps people and AI agent teams work together on real-world questions. A human
-          Director guides a Mini-Pod through research, constructive challenge, artifact building, and
-          verification. The result is an inspectable record of what was asked, what the agents
-          contributed, what sources were used, and what @Veritas could or could not verify.
         </p>
-        <Link
-          href="/explore"
-          className="inline-block text-sm text-calm-muted underline hover:text-calm-text"
-        >
-          Explore released work before signing in
-        </Link>
+        <p className="text-base leading-relaxed text-calm-muted">
+          Brainpod is a collaborative workspace where a human Director guides AI agent teams
+          (Mini-Pods) through research, constructive challenge, artifact building, and verification.
+          People use Brainpod to explore questions, pressure-test ideas, and produce inspectable
+          work records — not to cash out points or trade access as a marketplace.
+        </p>
+        <p className="text-sm leading-relaxed text-calm-muted">
+          Operated under LuminaNova.org (501(c)(3)). Released studies may be observed on Explore;
+          private pod history stays private until a Director chooses to publish a short summary.
+        </p>
+        <div className="flex flex-wrap gap-4 text-sm">
+          <Link href="/explore" className="text-calm-muted underline hover:text-calm-text">
+            Explore released work
+          </Link>
+          <Link href="/privacy" className="text-calm-muted underline hover:text-calm-text">
+            Privacy Policy
+          </Link>
+          <Link href="/terms" className="text-calm-muted underline hover:text-calm-text">
+            Terms
+          </Link>
+        </div>
       </header>
 
       <section className="grid gap-4 sm:grid-cols-3" aria-label="How Brainpod works">
         <article className="rounded-lg border border-calm-border bg-calm-surface p-4">
           <h2 className="text-sm font-medium text-calm-text">Ground</h2>
           <p className="mt-2 text-sm leading-relaxed text-calm-muted">
-            @Astra gathers evidence and identifies sources for the question.
+            @Astra gathers evidence and identifies sources for the question the human Director asks.
           </p>
         </article>
         <article className="rounded-lg border border-calm-border bg-calm-surface p-4">
           <h2 className="text-sm font-medium text-calm-text">Challenge</h2>
           <p className="mt-2 text-sm leading-relaxed text-calm-muted">
-            @Kaelen tests assumptions, gaps, edge cases, and practical risks.
+            @Kaelen tests assumptions, gaps, edge cases, and practical risks before work is treated as
+            solid.
           </p>
         </article>
         <article className="rounded-lg border border-calm-border bg-calm-surface p-4">
           <h2 className="text-sm font-medium text-calm-text">Construct and verify</h2>
           <p className="mt-2 text-sm leading-relaxed text-calm-muted">
-            @Synthetix builds an artifact and @Veritas checks its evidence before any Proof-of-Value
-            can be awarded.
+            @Synthetix builds an artifact and @Veritas checks evidence before any Proof-of-Value can
+            be awarded.
           </p>
         </article>
       </section>
 
       <section className="space-y-3 border-t border-calm-border pt-8">
-        <h2 className="text-lg font-medium text-calm-text">What Google sign-in does</h2>
+        <h2 className="text-lg font-medium text-calm-text">Why Brainpod requests sign-in</h2>
         <p className="max-w-2xl text-sm leading-relaxed text-calm-muted">
-          Brainpod uses Google OAuth only to authenticate you and create your Brainpod account. With
-          your permission, Google provides your basic account identity, including your email address
-          and basic profile information, so Brainpod can identify your account and show your
-          signed-in workspace. Brainpod does not read your Gmail, contacts, files, calendar, or other
-          Google services, and it does not sell your Google information or use it for advertising.
+          Brainpod uses Google sign-in (or email magic links) only to authenticate you and create
+          your Brainpod account. Google may provide your basic account identity — typically your
+          email address and basic profile information — so Brainpod can identify your account, show
+          your private Workspace and Mini-Pods, enforce daily free-prompt limits, and attribute
+          directed work to you inside shared pods. Brainpod does not read your Gmail, contacts,
+          Drive, Calendar, or other Google services. It does not sell your Google information or use
+          it for advertising.
+        </p>
+        <p className="max-w-2xl text-sm leading-relaxed text-calm-muted">
+          Full details are in the{' '}
+          <Link href="/privacy" className="underline hover:text-calm-text">
+            Privacy Policy
+          </Link>
+          . The same policy URL should be listed on the Google OAuth consent configuration.
         </p>
       </section>
 
       <section className="space-y-3 border-t border-calm-border pt-8">
-        <h2 className="text-lg font-medium text-calm-text">A transparent place to begin</h2>
-        <p className="max-w-2xl text-sm leading-relaxed text-calm-muted">
-          Brainpod is an early-stage public-benefit project under LuminaNova.org. It is designed for
-          individuals and larger Mini-Pods to bring lived experience into conversation with broad
-          digital knowledge. Contributions are co-efforts and experiments: perspectives can be
-          challenged, theories can evolve, and verified work remains inspectable rather than becoming
-          an unquestionable absolute.
-        </p>
+        <h2 className="text-lg font-medium text-calm-text">What you can do in Brainpod</h2>
+        <ul className="max-w-2xl list-disc space-y-2 pl-5 text-sm leading-relaxed text-calm-muted">
+          <li>Direct native agents through Brainstorm, Assist, or Construct &amp; Verify modes</li>
+          <li>Continue multi-turn studies inside private Mini-Pods and invite collaborators by email</li>
+          <li>Release short owner-authored public summaries to Explore when you choose</li>
+          <li>Copy study threads for offline notes without turning the platform into a cash-out ledger</li>
+        </ul>
       </section>
 
       <div className="flex flex-wrap items-center gap-4">
@@ -75,7 +94,10 @@ export default function PublicHome() {
           href="/login"
           className="rounded-lg bg-calm-accent px-5 py-3 text-sm font-medium text-calm-bg"
         >
-          Enter Brainpod
+          Sign in to Brainpod
+        </Link>
+        <Link href="/explore" className="text-sm text-calm-muted underline hover:text-calm-text">
+          Explore without signing in
         </Link>
       </div>
 

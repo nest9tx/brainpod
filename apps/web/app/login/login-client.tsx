@@ -7,20 +7,31 @@ import Link from 'next/link';
 import SiteNav from '@/components/site-nav';
 import SiteFooter from '@/components/site-footer';
 
-export default function LoginClient() {
+export default function LoginClient({ authError }: { authError?: string }) {
   const searchParams = useSearchParams();
   const nextPath = searchParams.get('next') || '/';
   const [email, setEmail] = useState('');
   const [status, setStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
-  const [errorMessage, setErrorMessage] = useState('');
+  const [errorMessage, setErrorMessage] = useState(
+    authError === 'auth_callback'
+      ? 'Sign-in could not be completed. Please try Google or email again.'
+      : ''
+  );
 
   function redirectTarget() {
-    if (nextPath.startsWith('/') && !nextPath.startsWith('//')) return nextPath;
+    if (
+      nextPath.startsWith('/') &&
+      !nextPath.startsWith('//') &&
+      !nextPath.startsWith('/login')
+    ) {
+      return nextPath;
+    }
     return '/';
   }
 
   async function handleSignIn() {
     setStatus('sending');
+    setErrorMessage('');
     const supabase = createClient();
     const { error } = await supabase.auth.signInWithOtp({
       email,
@@ -38,6 +49,7 @@ export default function LoginClient() {
   }
 
   async function handleGoogleSignIn() {
+    setErrorMessage('');
     const supabase = createClient();
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
@@ -58,29 +70,19 @@ export default function LoginClient() {
 
       <div className="space-y-2">
         <p className="text-sm uppercase tracking-widest text-calm-muted">Brainpod</p>
-        <h1 className="text-xl font-medium text-calm-text">
-          A public-benefit space where human direction and AI agents build things together —
-          openly, and only with verification behind every result.
-        </h1>
+        <h1 className="text-xl font-medium text-calm-text">Sign in to Brainpod</h1>
         <p className="text-sm leading-relaxed text-calm-muted">
-          Sign in below to enter the Orientation Mini-Pod: a small, guided room where you direct
-          four native agents through one working cycle. No cost, no cash-out, and nothing you
-          direct is public until you choose to share it.
+          Brainpod is a public-benefit application for human-directed collaboration with AI agent
+          teams. Sign in to open your Orientation Mini-Pod, direct research and construction cycles,
+          and keep private work private until you choose to release a summary.
         </p>
       </div>
 
       <div className="space-y-2 border-t border-calm-border pt-4">
         <p className="text-sm leading-relaxed text-calm-muted">
-          Brainpod bridges lived, physical experience with the swarm&apos;s breadth of digital
-          knowledge. Individuals and small Mini-Pods work as co-efforts, not a leaderboard — the
-          goal is for everyone involved, human and agent, to learn and grow, which strengthens the
-          whole ecosystem. There&apos;s no hierarchy to climb, only perspectives to bring.
-        </p>
-        <p className="text-xs leading-relaxed text-calm-muted">
-          We only ask for your email to run this one-time sign-in link and track your daily
-          free-prompt count — nothing else is collected here. Advanced members can later bring their
-          own agents (BYOA) into shared Mini-Pods under the same verification rules as native
-          agents.
+          Google sign-in is used only to authenticate your account (email and basic profile). Brainpod
+          does not access Gmail, Drive, contacts, or other Google services. Email magic links are an
+          alternative that also only establish your Brainpod session and daily free-prompt count.
         </p>
       </div>
 
@@ -88,6 +90,10 @@ export default function LoginClient() {
         Prefer to look around first?{' '}
         <Link href="/explore" className="underline hover:text-calm-text">
           Explore released work
+        </Link>
+        {' · '}
+        <Link href="/" className="underline hover:text-calm-text">
+          Brainpod home
         </Link>
       </p>
 
@@ -99,7 +105,8 @@ export default function LoginClient() {
           Continue with Google
         </button>
         <p className="text-xs text-calm-muted">
-          No email is sent — this just confirms you&apos;re already signed into Google.
+          Authenticates you with Google and returns you to Brainpod. No Google content is read beyond
+          basic account identity.
         </p>
 
         <div className="flex items-center gap-3 py-1">
@@ -131,10 +138,10 @@ export default function LoginClient() {
         </p>
         {status === 'sent' && (
           <p className="text-sm text-calm-accent">
-            Link sent. Open it from this device to continue where you left off.
+            Link sent. Open it from this device to continue into Brainpod.
           </p>
         )}
-        {status === 'error' && (
+        {(status === 'error' || errorMessage) && (
           <p className="text-sm text-red-400">{errorMessage || 'Something went wrong. Please try again.'}</p>
         )}
       </div>

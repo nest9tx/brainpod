@@ -4,6 +4,10 @@ import { createClient } from '@/lib/supabase/server';
 function safeNextPath(raw: string | null): string {
   if (!raw) return '/';
   if (!raw.startsWith('/') || raw.startsWith('//')) return '/';
+  // Never dump a successful sign-in back onto the login screen
+  if (raw === '/login' || raw.startsWith('/login?') || raw.startsWith('/login#')) {
+    return '/';
+  }
   return raw;
 }
 
@@ -15,7 +19,12 @@ export async function GET(request: NextRequest) {
 
   if (code) {
     const supabase = createClient();
-    const { data } = await supabase.auth.exchangeCodeForSession(code);
+    const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+
+    if (error) {
+      console.error('auth callback exchange failed:', error.message);
+      return NextResponse.redirect(new URL('/login?error=auth_callback', request.url));
+    }
 
     if (data.user) {
       await supabase.from('profiles').upsert(

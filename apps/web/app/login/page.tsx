@@ -1,7 +1,27 @@
 import { Suspense } from 'react';
+import { redirect } from 'next/navigation';
+import { createClient } from '@/lib/supabase/server';
 import LoginClient from './login-client';
 
-export default function LoginPage() {
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: { next?: string; error?: string };
+}) {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  // Already signed in — never trap the user on the login form
+  if (user) {
+    const next = searchParams.next;
+    if (next && next.startsWith('/') && !next.startsWith('//') && !next.startsWith('/login')) {
+      redirect(next);
+    }
+    redirect('/');
+  }
+
   return (
     <Suspense
       fallback={
@@ -10,7 +30,7 @@ export default function LoginPage() {
         </main>
       }
     >
-      <LoginClient />
+      <LoginClient authError={searchParams.error} />
     </Suspense>
   );
 }
