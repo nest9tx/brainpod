@@ -9,6 +9,20 @@ const TURNS_PER_CYCLE = 5;
 
 const AGENT_ID_SET: Set<string> = new Set(Object.values(AGENT_PROFILE_IDS));
 
+function parseDirectorMeta(raw: string | null | undefined): {
+  directorNote: string | null;
+  referenceUrl: string | null;
+} {
+  if (!raw?.trim()) return { directorNote: null, referenceUrl: null };
+  let directorNote: string | null = null;
+  let referenceUrl: string | null = null;
+  for (const line of raw.split('\n')) {
+    if (line.startsWith('NOTE:')) directorNote = line.slice(5).trim() || null;
+    if (line.startsWith('REF:')) referenceUrl = line.slice(4).trim() || null;
+  }
+  return { directorNote, referenceUrl };
+}
+
 async function importLegacyTurns(admin: ReturnType<typeof createAdminClient>, userId: string, podId: string) {
   const { count: privateTurnCount } = await admin
     .from('pod_turns')
@@ -207,7 +221,7 @@ export default async function Home({ searchParams }: { searchParams: { pod?: str
     admin
       .from('pod_turns')
       .select(
-        'summary_conclusion, turn_sequence, sender_id, sender_label, sender:profiles!pod_turns_sender_id_fkey(display_name)'
+        'summary_conclusion, turn_sequence, sender_id, sender_label, collapsed_reasoning, sender:profiles!pod_turns_sender_id_fkey(display_name)'
       )
       .eq('pod_id', pod.id)
       .order('turn_sequence', { ascending: true })
@@ -221,6 +235,7 @@ export default async function Home({ searchParams }: { searchParams: { pod?: str
     turn_sequence: number;
     sender_id: string;
     sender_label: string | null;
+    collapsed_reasoning: string | null;
     sender: { display_name: string } | null;
   };
 
@@ -230,6 +245,8 @@ export default async function Home({ searchParams }: { searchParams: { pod?: str
     question: string;
     directorLabel: string;
     turns: SwarmTurn[];
+    directorNote: string | null;
+    referenceUrl: string | null;
   }[] = [];
 
   for (let i = 0; i < rows.length; i += TURNS_PER_CYCLE) {
@@ -237,10 +254,10 @@ export default async function Home({ searchParams }: { searchParams: { pod?: str
     const director = chunk[0];
     if (!director) continue;
     const isAgentDirector = AGENT_ID_SET.has(director.sender_id);
-    // Prefer frozen label from contribution time; fall back for older rows
     const label = isAgentDirector
       ? 'Director'
       : director.sender_label || director.sender?.display_name || 'Director';
+    const meta = parseDirectorMeta(director.collapsed_reasoning);
     const agentTurns: SwarmTurn[] = chunk.slice(1).map((turn) => ({
       agent: turn.sender_label || turn.sender?.display_name || 'Contributor',
       summary_conclusion: turn.summary_conclusion,
@@ -249,6 +266,8 @@ export default async function Home({ searchParams }: { searchParams: { pod?: str
       question: director.summary_conclusion,
       directorLabel: label,
       turns: agentTurns,
+      directorNote: meta.directorNote,
+      referenceUrl: meta.referenceUrl,
     });
   }
   initialCycles.reverse();
