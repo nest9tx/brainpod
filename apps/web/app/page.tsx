@@ -180,13 +180,22 @@ export default async function Home({ searchParams }: { searchParams: { pod?: str
 
   await importLegacyTurns(admin, user.id, pod.id);
 
-  await admin.from('profiles').upsert(
-    {
+  // Ensure profile exists without overwriting a chosen display name
+  const { data: existingProfile } = await admin
+    .from('profiles')
+    .select('id, display_name')
+    .eq('id', user.id)
+    .maybeSingle();
+
+  if (!existingProfile) {
+    await admin.from('profiles').insert({
       id: user.id,
       display_name: user.email?.split('@')[0] ?? 'Director',
-    },
-    { onConflict: 'id' }
-  );
+    });
+  }
+
+  const directorLabel =
+    existingProfile?.display_name || user.email?.split('@')[0] || 'Director';
 
   const [{ data: usage }, { data: history }] = await Promise.all([
     supabase
@@ -225,7 +234,7 @@ export default async function Home({ searchParams }: { searchParams: { pod?: str
     const director = chunk[0];
     if (!director) continue;
     const isAgentDirector = AGENT_ID_SET.has(director.sender_id);
-    const directorLabel = isAgentDirector
+    const label = isAgentDirector
       ? 'Director'
       : director.sender?.display_name || 'Director';
     const agentTurns: SwarmTurn[] = chunk.slice(1).map((turn) => ({
@@ -234,7 +243,7 @@ export default async function Home({ searchParams }: { searchParams: { pod?: str
     }));
     initialCycles.push({
       question: director.summary_conclusion,
-      directorLabel,
+      directorLabel: label,
       turns: agentTurns,
     });
   }
@@ -248,7 +257,7 @@ export default async function Home({ searchParams }: { searchParams: { pod?: str
       initialRemainingPrompts={remainingPrompts}
       initialCycles={initialCycles}
       userEmail={user.email ?? ''}
-      currentDirectorLabel={user.email?.split('@')[0] ?? 'Director'}
+      currentDirectorLabel={directorLabel}
     />
   );
 }
