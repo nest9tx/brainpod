@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 
 type Pod = {
   id: string;
@@ -9,6 +10,8 @@ type Pod = {
   status: string;
   rolling_summary: string;
   created_at: string;
+  is_owner?: boolean;
+  can_direct?: boolean;
 };
 
 type Category = {
@@ -24,6 +27,13 @@ type Artifact = {
   public_summary: string | null;
   veritas_score: number | null;
   is_verified: boolean;
+};
+
+type PendingInvite = {
+  id: string;
+  token: string;
+  pod_name: string;
+  expires_at: string;
 };
 
 function studyStatusLabel(artifact: Artifact): { label: string; tone: string } {
@@ -56,10 +66,12 @@ export default function PodManager({
   initialPods,
   categories,
   initialArtifacts,
+  pendingInvites = [],
 }: {
   initialPods: Pod[];
   categories: Category[];
   initialArtifacts: Artifact[];
+  pendingInvites?: PendingInvite[];
 }) {
   const [pods, setPods] = useState(initialPods);
   const [artifacts, setArtifacts] = useState(initialArtifacts);
@@ -71,8 +83,11 @@ export default function PodManager({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
   const [editingCategory, setEditingCategory] = useState('');
+  const [inviteEmailByPod, setInviteEmailByPod] = useState<Record<string, string>>({});
+  const [lastInviteUrlByPod, setLastInviteUrlByPod] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [info, setInfo] = useState('');
 
   const podNameById = Object.fromEntries(pods.map((pod) => [pod.id, pod.name]));
 
@@ -101,7 +116,7 @@ export default function PodManager({
     const data = await response.json();
     if (!response.ok) setError(data.detail ?? 'Could not create the pod.');
     else {
-      setPods((current) => [...current, data.pod]);
+      setPods((current) => [...current, { ...data.pod, is_owner: true, can_direct: true }]);
       setNewName('');
     }
     setBusy(false);
@@ -119,7 +134,9 @@ export default function PodManager({
     const data = await response.json();
     if (!response.ok) setError(data.detail ?? 'Could not rename the pod.');
     else {
-      setPods((current) => current.map((pod) => (pod.id === id ? data.pod : pod)));
+      setPods((current) =>
+        current.map((pod) => (pod.id === id ? { ...pod, ...data.pod, is_owner: true } : pod))
+      );
       setEditingId(null);
     }
     setBusy(false);
@@ -151,94 +168,186 @@ export default function PodManager({
     setBusy(false);
   }
 
+  async function sendInvite(podId: string) {
+    const email = (inviteEmailByPod[podId] ?? '').trim();
+    if (!email) return;
+    setBusy(true);
+    setError('');
+    setInfo('');
+    const response = await fetch('/api/workspace/invites', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pod_id: podId, email, can_direct: true }),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      setError(data.detail ?? data.error ?? 'Could not create the invitation.');
+    } else {
+      setLastInviteUrlByPod((current) => ({ ...current, [podId]: data.invite_url }));
+      setInviteEmailByPod((current) => ({ ...current, [podId]: '' }));
+      if (data.email?.sent) {
+        setInfo(`Invitation emailed to ${data.invite.invited_email}.`);
+      } else {
+        setInfo(
+          `Invitation created for ${data.invite.invited_email}. Copy the link below to share it (email delivery is not configured yet).`
+        );
+      }
+    }
+    setBusy(false);
+  }
+
   return (
     <>
+      {pendingInvites.length > 0 && (
+        <section className="space-y-3 rounded-lg border border-calm-accent/30 bg-calm-accent/5 p-4">
+          <h2 className="text-sm font-medium text-calm-text">Pending invitations for you</h2>
+          {pendingInvites.map((invite) => (
+            <div key={invite.id} className="flex flex-wrap items-center justify-between gap-3 text-sm">
+              <span className="text-calm-muted">
+                {invite.pod_name}
+              </span>
+              <Link
+                href={`/invite/${invite.token}`}
+                className="text-calm-accent underline hover:text-calm-text"
+              >
+                Review & accept
+              </Link>
+            </div>
+          ))}
+        </section>
+      )}
+
       <section className="space-y-3" aria-label="Your Mini-Pods">
         {pods.map((pod) => (
           <article
             key={pod.id}
-            className="flex items-center justify-between gap-5 rounded-lg border border-calm-border bg-calm-surface p-5"
+            className="space-y-3 rounded-lg border border-calm-border bg-calm-surface p-5"
           >
-            <div className="min-w-0 space-y-2">
-              {editingId === pod.id ? (
-                <div className="flex flex-wrap items-center gap-2">
-                  <input
-                    value={editingName}
-                    onChange={(event) => setEditingName(event.target.value)}
-                    className="rounded border border-calm-border bg-calm-bg px-2 py-1 text-sm text-calm-text"
-                    maxLength={100}
-                  />
-                  <select
-                    value={editingCategory}
-                    onChange={(event) => setEditingCategory(event.target.value)}
-                    className="rounded border border-calm-border bg-calm-bg px-2 py-1 text-sm text-calm-text"
-                  >
-                    {categories.map((category) => (
-                      <option key={category.slug} value={category.slug}>
-                        {category.display_name}
-                      </option>
-                    ))}
-                  </select>
-                  <button
-                    onClick={() => renamePod(pod.id)}
-                    disabled={busy}
-                    className="text-xs text-calm-accent underline"
-                  >
-                    Save
-                  </button>
-                  <button
-                    onClick={() => setEditingId(null)}
-                    className="text-xs text-calm-muted underline"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              ) : (
-                <div className="flex flex-wrap items-center gap-3">
-                  <h2 className="text-base font-medium text-calm-text">{pod.name}</h2>
-                  <button
-                    onClick={() => {
-                      setEditingId(pod.id);
-                      setEditingName(pod.name);
-                      setEditingCategory(pod.category_slug);
-                    }}
-                    className="text-xs text-calm-muted underline"
-                  >
-                    Rename
-                  </button>
-                  <span className="rounded-full border border-calm-accent px-2 py-0.5 text-xs text-calm-accent">
-                    {categories.find((category) => category.slug === pod.category_slug)?.display_name ??
-                      pod.category_slug}
-                  </span>
-                  <span className="rounded-full border border-calm-border px-2 py-0.5 text-xs text-calm-muted">
-                    {pod.status === 'private_isolated' ? 'Private' : pod.status}
-                  </span>
-                </div>
-              )}
-              <p className="max-w-xl text-sm leading-relaxed text-calm-muted">{pod.rolling_summary}</p>
+            <div className="flex items-start justify-between gap-5">
+              <div className="min-w-0 space-y-2">
+                {editingId === pod.id ? (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <input
+                      value={editingName}
+                      onChange={(event) => setEditingName(event.target.value)}
+                      className="rounded border border-calm-border bg-calm-bg px-2 py-1 text-sm text-calm-text"
+                      maxLength={100}
+                    />
+                    <select
+                      value={editingCategory}
+                      onChange={(event) => setEditingCategory(event.target.value)}
+                      className="rounded border border-calm-border bg-calm-bg px-2 py-1 text-sm text-calm-text"
+                    >
+                      {categories.map((category) => (
+                        <option key={category.slug} value={category.slug}>
+                          {category.display_name}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      onClick={() => renamePod(pod.id)}
+                      disabled={busy}
+                      className="text-xs text-calm-accent underline"
+                    >
+                      Save
+                    </button>
+                    <button
+                      onClick={() => setEditingId(null)}
+                      className="text-xs text-calm-muted underline"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex flex-wrap items-center gap-3">
+                    <h2 className="text-base font-medium text-calm-text">{pod.name}</h2>
+                    {pod.is_owner && (
+                      <button
+                        onClick={() => {
+                          setEditingId(pod.id);
+                          setEditingName(pod.name);
+                          setEditingCategory(pod.category_slug);
+                        }}
+                        className="text-xs text-calm-muted underline"
+                      >
+                        Rename
+                      </button>
+                    )}
+                    <span className="rounded-full border border-calm-accent px-2 py-0.5 text-xs text-calm-accent">
+                      {categories.find((category) => category.slug === pod.category_slug)
+                        ?.display_name ?? pod.category_slug}
+                    </span>
+                    <span className="rounded-full border border-calm-border px-2 py-0.5 text-xs text-calm-muted">
+                      {pod.is_owner ? 'Owner' : 'Shared with you'}
+                    </span>
+                  </div>
+                )}
+                <p className="max-w-xl text-sm leading-relaxed text-calm-muted">{pod.rolling_summary}</p>
+              </div>
+              <a
+                href={`/?pod=${pod.id}`}
+                className="shrink-0 rounded-lg bg-calm-accent px-4 py-2 text-sm font-medium text-calm-bg"
+              >
+                Open pod
+              </a>
             </div>
-            <a
-              href={`/?pod=${pod.id}`}
-              className="shrink-0 rounded-lg bg-calm-accent px-4 py-2 text-sm font-medium text-calm-bg"
-            >
-              Open pod
-            </a>
+
+            {pod.is_owner && (
+              <div className="space-y-2 border-t border-calm-border pt-3">
+                <p className="text-xs text-calm-muted">
+                  Invite a collaborator by email (5 invites/day). They can sign up with that email if
+                  needed.
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <input
+                    type="email"
+                    value={inviteEmailByPod[pod.id] ?? ''}
+                    onChange={(event) =>
+                      setInviteEmailByPod((current) => ({
+                        ...current,
+                        [pod.id]: event.target.value,
+                      }))
+                    }
+                    placeholder="collaborator@example.com"
+                    className="min-w-0 flex-1 rounded border border-calm-border bg-calm-bg px-3 py-1.5 text-sm text-calm-text"
+                  />
+                  <button
+                    onClick={() => sendInvite(pod.id)}
+                    disabled={busy || !(inviteEmailByPod[pod.id] ?? '').trim()}
+                    className="rounded border border-calm-border px-3 py-1.5 text-xs text-calm-text disabled:opacity-40"
+                  >
+                    Send invite
+                  </button>
+                </div>
+                {lastInviteUrlByPod[pod.id] && (
+                  <p className="break-all text-xs text-calm-muted">
+                    Invite link:{' '}
+                    <a
+                      href={lastInviteUrlByPod[pod.id]}
+                      className="text-calm-accent underline"
+                    >
+                      {lastInviteUrlByPod[pod.id]}
+                    </a>
+                  </p>
+                )}
+              </div>
+            )}
           </article>
         ))}
       </section>
+
+      {(error || info) && (
+        <p className={`text-sm ${error ? 'text-red-400' : 'text-calm-muted'}`}>{error || info}</p>
+      )}
 
       {artifacts.length > 0 && (
         <section className="space-y-3 border-t border-calm-border pt-8">
           <div className="space-y-1">
             <h2 className="text-lg font-medium text-calm-text">Studies in your pods</h2>
             <p className="text-xs text-calm-muted">
-              Review collaborative work across your Mini-Pods. Each study shows its originating pod.
-              Use Continue to open that pod and resume the thread there. To release work publicly,
-              write a short summary in your own words, then release. You can update or unpublish later.
+              Review collaborative work across your Mini-Pods. Use Continue to open the originating pod.
             </p>
           </div>
-
-          {error && <p className="text-sm text-red-400">{error}</p>}
 
           {groupedArtifacts.map((attempts) => {
             const first = attempts[0];
@@ -314,12 +423,6 @@ export default function PodManager({
                             </span>
                           </div>
 
-                          {artifact.is_verified && (
-                            <p className="mt-2 text-xs text-calm-accent">
-                              Collaborative contribution advanced under human direction with the swarm.
-                            </p>
-                          )}
-
                           <textarea
                             value={summaryDrafts[artifact.id] ?? ''}
                             onChange={(event) =>
@@ -375,8 +478,8 @@ export default function PodManager({
       <section className="space-y-3 border-t border-calm-border pt-8">
         <h2 className="text-lg font-medium text-calm-text">Create a private pod</h2>
         <p className="text-sm leading-relaxed text-calm-muted">
-          Start a separate room for a different question, domain, or experiment. It belongs to this
-          account until invitations are added.
+          Start a separate room for a different question, domain, or experiment. Invite collaborators
+          after it exists.
         </p>
         <div className="flex flex-wrap gap-2">
           <input
@@ -405,7 +508,6 @@ export default function PodManager({
             Create pod
           </button>
         </div>
-        {error && <p className="text-sm text-red-400">{error}</p>}
       </section>
     </>
   );
