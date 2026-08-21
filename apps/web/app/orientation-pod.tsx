@@ -144,7 +144,7 @@ export default function OrientationPod({
           question: directorPrompt,
           turns: data.turns ?? [],
           verdict: data.verification ?? null,
-          mode: data.mode ?? mode,
+          mode: (data.mode as WorkMode) ?? mode,
         },
         ...prev,
       ]);
@@ -163,6 +163,8 @@ export default function OrientationPod({
   function startFresh() {
     setIsFollowUp(false);
     setDirectorPrompt('');
+    // Mode stays as last selection so the Director can change it if desired,
+    // but the selector remains fully visible and interactive.
   }
 
   async function handleSignOut() {
@@ -172,6 +174,8 @@ export default function OrientationPod({
   }
 
   const latestCycle = cycles[0];
+  const activeModeLabel =
+    MODE_OPTIONS.find((o) => o.id === mode)?.label ?? 'Construct & Verify';
 
   return (
     <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-8 px-6 py-16">
@@ -209,9 +213,12 @@ export default function OrientationPod({
         today · resets 00:00 UTC
       </div>
 
-      {/* Work Mode Selector */}
+      {/* Work Mode Selector — always visible */}
       <section className="space-y-3">
-        <p className="text-sm text-calm-muted">What kind of work is this?</p>
+        <div className="flex items-center justify-between">
+          <p className="text-sm text-calm-muted">What kind of work is this?</p>
+          <p className="text-xs text-calm-accent">Active: {activeModeLabel}</p>
+        </div>
         <div className="grid gap-2 sm:grid-cols-3">
           {MODE_OPTIONS.map((opt) => (
             <button
@@ -220,7 +227,7 @@ export default function OrientationPod({
               onClick={() => setMode(opt.id)}
               className={`rounded-lg border p-3 text-left transition ${
                 mode === opt.id
-                  ? 'border-calm-accent bg-calm-accent/10 text-calm-text'
+                  ? 'border-calm-accent bg-calm-accent/10 text-calm-text ring-1 ring-calm-accent/40'
                   : 'border-calm-border bg-calm-surface text-calm-muted hover:border-calm-accent/50'
               }`}
             >
@@ -250,6 +257,7 @@ export default function OrientationPod({
           <div className="rounded-md border border-calm-border/60 bg-calm-bg/50 px-3 py-2 text-xs text-calm-muted">
             Continuing from: “{latestCycle.question.slice(0, 120)}
             {latestCycle.question.length > 120 ? '…' : ''}”
+            {latestCycle.mode ? ` · previous mode: ${latestCycle.mode}` : ''}
           </div>
         )}
 
@@ -271,7 +279,7 @@ export default function OrientationPod({
         />
         <p className="text-xs text-calm-muted">
           {isFollowUp
-            ? 'This prompt will be sent with the previous cycle as context so the swarm can build on what already happened.'
+            ? `Continuing in ${activeModeLabel} mode. Change the mode above if you want a different kind of response.`
             : mode === 'brainstorm'
               ? 'Brainstorm mode prioritizes open perspectives over scoring.'
               : mode === 'assist'
