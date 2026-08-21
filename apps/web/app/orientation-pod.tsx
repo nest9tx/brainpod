@@ -47,10 +47,10 @@ function parseVerdictFromVeritasText(text: string | undefined): Verdict | null {
   }
 }
 
-function buildPriorContext(cycles: Cycle[]): string {
-  if (cycles.length === 0) return '';
+function buildPriorContext(cycles: Cycle[], directorNote?: string): string {
+  if (cycles.length === 0 && !directorNote?.trim()) return '';
   const chronological = [...cycles].reverse();
-  return chronological
+  const history = chronological
     .map((c) => {
       const agentBits = c.turns
         .map((t) => `${t.agent}: ${t.summary_conclusion.slice(0, 500)}`)
@@ -58,6 +58,11 @@ function buildPriorContext(cycles: Cycle[]): string {
       return `Director: ${c.question}\n${agentBits}`;
     })
     .join('\n\n---\n\n');
+
+  if (directorNote?.trim()) {
+    return `${history}\n\n---\n\nDirector note / additional context for this continuation:\n${directorNote.trim()}`;
+  }
+  return history;
 }
 
 const MODE_OPTIONS: { id: WorkMode; label: string; description: string }[] = [
@@ -175,6 +180,7 @@ export default function OrientationPod({
   userEmail,
 }: OrientationPodProps) {
   const [directorPrompt, setDirectorPrompt] = useState('');
+  const [directorNote, setDirectorNote] = useState('');
   const [mode, setMode] = useState<WorkMode>('construct');
   const [cycles, setCycles] = useState<Cycle[]>(
     initialCycles.map((cycle) => ({
@@ -199,7 +205,11 @@ export default function OrientationPod({
     setStatus('thinking');
     setPendingQuestion(directorPrompt);
 
-    const priorContext = isFollowUp ? buildPriorContext(cycles) : '';
+    const priorContext = isFollowUp
+      ? buildPriorContext(cycles, directorNote)
+      : directorNote.trim()
+        ? `Director note / additional context:\n${directorNote.trim()}`
+        : '';
 
     try {
       const res = await fetch('/api/orchestra', {
@@ -239,6 +249,7 @@ export default function OrientationPod({
       setExpandedCycle(0);
       setPendingQuestion(null);
       setDirectorPrompt('');
+      setDirectorNote('');
       setIsFollowUp(true);
       setRemainingPrompts((n) => Math.max(n - 1, 0));
       setStatus('idle');
@@ -251,6 +262,7 @@ export default function OrientationPod({
   function startFresh() {
     setIsFollowUp(false);
     setDirectorPrompt('');
+    setDirectorNote('');
   }
 
   async function handleSignOut() {
@@ -376,6 +388,23 @@ export default function OrientationPod({
           value={directorPrompt}
           onChange={(e) => setDirectorPrompt(e.target.value)}
         />
+
+        {/* Lightweight note / reference — available on every send, especially useful on continuation */}
+        <div className="space-y-1">
+          <label htmlFor="director-note" className="text-xs text-calm-muted">
+            Optional note or reference (short)
+          </label>
+          <textarea
+            id="director-note"
+            className="w-full rounded-lg border border-calm-border/70 bg-calm-bg/40 p-2.5 text-xs text-calm-text placeholder:text-calm-muted/70 focus:border-calm-accent focus:outline-none"
+            rows={2}
+            placeholder="e.g. constraint, prior decision, link, or brief clarification for the swarm…"
+            value={directorNote}
+            onChange={(e) => setDirectorNote(e.target.value)}
+            maxLength={800}
+          />
+        </div>
+
         <p className="text-xs text-calm-muted">
           {isFollowUp
             ? `Continuing in ${activeModeLabel} mode. Change the mode above if you want a different kind of response.`
