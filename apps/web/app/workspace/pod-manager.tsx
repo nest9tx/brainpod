@@ -73,10 +73,13 @@ export default function PodManager({
   const [editingCategory, setEditingCategory] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+
+  const podNameById = Object.fromEntries(pods.map((pod) => [pod.id, pod.name]));
+
   const groupedArtifacts = Array.from(
     artifacts
       .reduce((groups, artifact) => {
-        const key = artifact.question?.trim().toLowerCase() ?? artifact.id;
+        const key = `${artifact.pod_id}::${artifact.question?.trim().toLowerCase() ?? artifact.id}`;
         const group = groups.get(key) ?? [];
         group.push(artifact);
         groups.set(key, group);
@@ -212,13 +215,15 @@ export default function PodManager({
           <div className="space-y-1">
             <h2 className="text-lg font-medium text-calm-text">Studies in your pods</h2>
             <p className="text-xs text-calm-muted">
-              Review collaborative work across your Mini-Pods. Verified studies can be given a public
-              summary when you choose to release them.
+              Review collaborative work across your Mini-Pods. Each study shows its originating pod.
+              Use Continue to open that pod and resume the thread there. Verified studies can be given
+              a public summary when you choose to release them.
             </p>
           </div>
 
           {groupedArtifacts.map((attempts) => {
-            const questionKey = attempts[0].question?.trim().toLowerCase() ?? attempts[0].id;
+            const first = attempts[0];
+            const questionKey = `${first.pod_id}::${first.question?.trim().toLowerCase() ?? first.id}`;
             const isExpanded = expandedStudy === questionKey;
             const best = attempts.reduce((acc, a) => {
               if (a.is_verified) return a;
@@ -227,6 +232,7 @@ export default function PodManager({
             }, attempts[0]);
             const bestStatus = studyStatusLabel(best);
             const verifiedCount = attempts.filter((a) => a.is_verified).length;
+            const podName = podNameById[first.pod_id] ?? 'Unknown pod';
 
             return (
               <article
@@ -235,25 +241,41 @@ export default function PodManager({
                   best.is_verified ? 'border-calm-accent/40' : 'border-calm-border'
                 }`}
               >
-                <button
-                  onClick={() => setExpandedStudy(isExpanded ? null : questionKey)}
-                  className="flex w-full items-start justify-between gap-4 text-left"
-                >
-                  <div className="min-w-0 space-y-1">
-                    <span className="text-sm text-calm-text">{attempts[0].question ?? 'Untitled study'}</span>
-                    <p className="text-xs text-calm-muted">
+                <div className="flex items-start gap-4">
+                  <button
+                    onClick={() => setExpandedStudy(isExpanded ? null : questionKey)}
+                    className="min-w-0 flex-1 text-left"
+                  >
+                    <span className="text-sm text-calm-text">{first.question ?? 'Untitled study'}</span>
+                    <p className="mt-1 text-xs text-calm-muted">
+                      In <span className="text-calm-text">{podName}</span>
+                      {' · '}
                       {attempts.length} attempt{attempts.length === 1 ? '' : 's'}
                       {verifiedCount > 0 ? ` · ${verifiedCount} verified` : ''}
                       {best.public_release ? ' · public summary released' : ''}
                     </p>
-                  </div>
-                  <div className="flex shrink-0 flex-col items-end gap-1">
+                  </button>
+                  <div className="flex shrink-0 flex-col items-end gap-2">
                     <span className={`rounded-full border px-2 py-0.5 text-xs ${bestStatus.tone}`}>
                       {bestStatus.label}
                     </span>
-                    <span className="text-xs text-calm-muted">{isExpanded ? 'Hide' : 'Review'}</span>
+                    <div className="flex items-center gap-3 text-xs">
+                      <a
+                        href={`/?pod=${first.pod_id}`}
+                        className="text-calm-accent underline hover:text-calm-text"
+                      >
+                        Continue
+                      </a>
+                      <button
+                        type="button"
+                        onClick={() => setExpandedStudy(isExpanded ? null : questionKey)}
+                        className="text-calm-muted underline hover:text-calm-text"
+                      >
+                        {isExpanded ? 'Hide' : 'Review'}
+                      </button>
+                    </div>
                   </div>
-                </button>
+                </div>
 
                 {isExpanded && (
                   <div className="mt-4 space-y-4 border-t border-calm-border pt-4">
