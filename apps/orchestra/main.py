@@ -1,4 +1,5 @@
 import os
+from typing import Literal, Optional
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
@@ -18,15 +19,17 @@ app.add_middleware(
     allow_headers=["Content-Type"],
 )
 
+WorkMode = Literal["brainstorm", "assist", "construct"]
+
 
 class DirectRequest(BaseModel):
     director_prompt: str
-    prior_context: str | None = None
+    prior_context: Optional[str] = None
+    mode: Optional[WorkMode] = "construct"
 
 
 @app.get("/")
 def root():
-    # Render's default health check hits "/"; without this it just logs harmless 404s.
     return {"service": "brainpod-orchestra", "status": "ok"}
 
 
@@ -46,4 +49,5 @@ def direct(request: DirectRequest):
     return run_swarm_cycle(
         director_prompt=request.director_prompt,
         prior_context=request.prior_context or "",
+        mode=request.mode or "construct",
     )
