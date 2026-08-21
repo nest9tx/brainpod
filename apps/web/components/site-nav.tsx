@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 
 type SiteNavProps = {
@@ -9,6 +10,9 @@ type SiteNavProps = {
 };
 
 export default function SiteNav({ variant = 'public', userEmail }: SiteNavProps) {
+  const pathname = usePathname();
+  const onLogin = pathname === '/login';
+
   async function handleSignOut() {
     const supabase = createClient();
     await supabase.auth.signOut();
@@ -18,7 +22,7 @@ export default function SiteNav({ variant = 'public', userEmail }: SiteNavProps)
   return (
     <nav className="flex items-center justify-between gap-4 text-xs text-calm-muted">
       <div className="flex flex-wrap items-center gap-4">
-        <Link href={variant === 'app' ? '/' : '/'} className="font-medium text-calm-text hover:text-calm-accent">
+        <Link href="/" className="font-medium text-calm-text hover:text-calm-accent">
           Brainpod
         </Link>
         {variant === 'app' ? (
@@ -38,9 +42,11 @@ export default function SiteNav({ variant = 'public', userEmail }: SiteNavProps)
             <Link href="/explore" className="underline hover:text-calm-text">
               Explore
             </Link>
-            <Link href="/login" className="underline hover:text-calm-text">
-              Enter
-            </Link>
+            {!onLogin && (
+              <Link href="/login" className="underline hover:text-calm-text">
+                Enter
+              </Link>
+            )}
           </>
         )}
       </div>
@@ -50,6 +56,10 @@ export default function SiteNav({ variant = 'public', userEmail }: SiteNavProps)
           <button onClick={handleSignOut} className="underline hover:text-calm-text">
             Sign out
           </button>
+        ) : onLogin ? (
+          <a href="#sign-in" className="underline hover:text-calm-text">
+            Sign in below
+          </a>
         ) : (
           <Link href="/login" className="underline hover:text-calm-text">
             Sign in

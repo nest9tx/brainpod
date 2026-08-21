@@ -91,7 +91,7 @@ export default function LoginClient() {
         </Link>
       </p>
 
-      <div className="space-y-3 border-t border-calm-border pt-6">
+      <div id="sign-in" className="space-y-3 border-t border-calm-border pt-6">
         <button
           onClick={handleGoogleSignIn}
           className="w-full rounded-lg border border-calm-border bg-calm-surface px-4 py-2 text-sm font-medium text-calm-text hover:border-calm-accent"

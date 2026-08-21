@@ -12,7 +12,7 @@ export default async function WorkspacePage() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) redirect('/');
+  if (!user) redirect('/login');
 
   const admin = createAdminClient();
 
@@ -118,9 +118,9 @@ export default async function WorkspacePage() {
         <p className="text-sm uppercase tracking-widest text-calm-muted">Brainpod workspace</p>
         <h1 className="text-2xl font-medium text-calm-text">Your Mini-Pods</h1>
         <p className="max-w-xl text-sm leading-relaxed text-calm-muted">
-          Private rooms for questions, experiments, and evolving work. Inviting someone shares the
-          entire pod history with them. You can revoke pending invites or remove access later — past
-          work stays in the record.
+          Private rooms for questions, experiments, and evolving work. Set your Director display
+          name below so shared pods show who directed each question. Inviting someone shares the
+          entire pod history; you can revoke or remove access later without erasing recorded work.
         </p>
       </header>
 
