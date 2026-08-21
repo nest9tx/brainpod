@@ -125,8 +125,7 @@ export default function PodManager({
     setBusy(false);
   }
 
-  async function setArtifactPublished(artifact: Artifact) {
-    const publish = !artifact.public_release;
+  async function setArtifactRelease(artifact: Artifact, publish: boolean) {
     const summary = summaryDrafts[artifact.id]?.trim() ?? '';
     setBusy(true);
     setError('');
@@ -136,8 +135,19 @@ export default function PodManager({
       body: JSON.stringify({ id: artifact.id, publish, public_summary: summary }),
     });
     const data = await response.json();
-    if (!response.ok) setError(data.detail ?? data.error ?? 'Could not update study visibility.');
-    else setArtifacts((current) => current.map((item) => (item.id === artifact.id ? data.artifact : item)));
+    if (!response.ok) {
+      setError(data.detail ?? data.error ?? 'Could not update study visibility.');
+    } else {
+      setArtifacts((current) =>
+        current.map((item) => (item.id === artifact.id ? data.artifact : item))
+      );
+      if (typeof data.artifact?.public_summary === 'string') {
+        setSummaryDrafts((current) => ({
+          ...current,
+          [artifact.id]: data.artifact.public_summary ?? '',
+        }));
+      }
+    }
     setBusy(false);
   }
 
@@ -169,10 +179,17 @@ export default function PodManager({
                       </option>
                     ))}
                   </select>
-                  <button onClick={() => renamePod(pod.id)} disabled={busy} className="text-xs text-calm-accent underline">
+                  <button
+                    onClick={() => renamePod(pod.id)}
+                    disabled={busy}
+                    className="text-xs text-calm-accent underline"
+                  >
                     Save
                   </button>
-                  <button onClick={() => setEditingId(null)} className="text-xs text-calm-muted underline">
+                  <button
+                    onClick={() => setEditingId(null)}
+                    className="text-xs text-calm-muted underline"
+                  >
                     Cancel
                   </button>
                 </div>
@@ -216,10 +233,12 @@ export default function PodManager({
             <h2 className="text-lg font-medium text-calm-text">Studies in your pods</h2>
             <p className="text-xs text-calm-muted">
               Review collaborative work across your Mini-Pods. Each study shows its originating pod.
-              Use Continue to open that pod and resume the thread there. Verified studies can be given
-              a public summary when you choose to release them.
+              Use Continue to open that pod and resume the thread there. To release work publicly,
+              write a short summary in your own words, then release. You can update or unpublish later.
             </p>
           </div>
+
+          {error && <p className="text-sm text-red-400">{error}</p>}
 
           {groupedArtifacts.map((attempts) => {
             const first = attempts[0];
@@ -309,19 +328,39 @@ export default function PodManager({
                                 [artifact.id]: event.target.value,
                               }))
                             }
-                            placeholder="Optional public summary of this study (shown if you release it)"
-                            rows={2}
+                            placeholder="Write a short public summary in your own words (required to release)"
+                            rows={3}
                             className="mt-3 w-full rounded border border-calm-border bg-calm-bg p-2 text-sm text-calm-text"
                           />
-                          <button
-                            onClick={() => setArtifactPublished(artifact)}
-                            disabled={busy}
-                            className="mt-2 text-xs text-calm-muted underline hover:text-calm-text"
-                          >
-                            {artifact.public_release
-                              ? 'Unpublish study summary'
-                              : 'Release public summary'}
-                          </button>
+
+                          <div className="mt-2 flex flex-wrap items-center gap-4">
+                            {artifact.public_release ? (
+                              <>
+                                <button
+                                  onClick={() => setArtifactRelease(artifact, true)}
+                                  disabled={busy}
+                                  className="text-xs text-calm-accent underline hover:text-calm-text"
+                                >
+                                  Update public summary
+                                </button>
+                                <button
+                                  onClick={() => setArtifactRelease(artifact, false)}
+                                  disabled={busy}
+                                  className="text-xs text-calm-muted underline hover:text-calm-text"
+                                >
+                                  Unpublish
+                                </button>
+                              </>
+                            ) : (
+                              <button
+                                onClick={() => setArtifactRelease(artifact, true)}
+                                disabled={busy}
+                                className="text-xs text-calm-accent underline hover:text-calm-text"
+                              >
+                                Release public summary
+                              </button>
+                            )}
+                          </div>
                         </div>
                       );
                     })}
