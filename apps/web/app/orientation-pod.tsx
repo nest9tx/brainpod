@@ -17,6 +17,7 @@ export type SwarmTurn = {
 type Verdict = { verdict: string; score: number | null; pov_eligible: boolean };
 type Cycle = {
   question: string;
+  directorLabel?: string;
   turns: SwarmTurn[];
   verdict?: Verdict | null;
   mode?: WorkMode;
@@ -27,8 +28,9 @@ type OrientationPodProps = {
   podName: string;
   podSummary: string;
   initialRemainingPrompts: number;
-  initialCycles: { question: string; turns: SwarmTurn[] }[];
+  initialCycles: { question: string; turns: SwarmTurn[]; directorLabel?: string }[];
   userEmail: string;
+  currentDirectorLabel?: string;
 };
 
 function parseVerdictFromVeritasText(text: string | undefined): Verdict | null {
@@ -51,7 +53,8 @@ function buildPriorContextFromCycle(cycle: Cycle, directorNote?: string): string
   const agentBits = cycle.turns
     .map((t) => `${t.agent}: ${t.summary_conclusion.slice(0, 600)}`)
     .join('\n');
-  let context = `Director: ${cycle.question}\n${agentBits}`;
+  const directorName = cycle.directorLabel ?? 'Director';
+  let context = `${directorName}: ${cycle.question}\n${agentBits}`;
   if (directorNote?.trim()) {
     context += `\n\n---\n\nDirector note / additional context for this continuation:\n${directorNote.trim()}`;
   }
@@ -66,7 +69,8 @@ function buildPriorContext(cycles: Cycle[], directorNote?: string): string {
       const agentBits = c.turns
         .map((t) => `${t.agent}: ${t.summary_conclusion.slice(0, 500)}`)
         .join('\n');
-      return `Director: ${c.question}\n${agentBits}`;
+      const directorName = c.directorLabel ?? 'Director';
+      return `${directorName}: ${c.question}\n${agentBits}`;
     })
     .join('\n\n---\n\n');
 
@@ -188,6 +192,7 @@ export default function OrientationPod({
   initialRemainingPrompts,
   initialCycles,
   userEmail,
+  currentDirectorLabel = 'Director',
 }: OrientationPodProps) {
   const [directorPrompt, setDirectorPrompt] = useState('');
   const [directorNote, setDirectorNote] = useState('');
@@ -196,6 +201,7 @@ export default function OrientationPod({
   const [cycles, setCycles] = useState<Cycle[]>(
     initialCycles.map((cycle) => ({
       ...cycle,
+      directorLabel: cycle.directorLabel ?? 'Director',
       verdict: parseVerdictFromVeritasText(
         cycle.turns.find((t) => t.agent === '@Veritas')?.summary_conclusion
       ),
@@ -259,6 +265,7 @@ export default function OrientationPod({
       setCycles((prev) => [
         {
           question: directorPrompt,
+          directorLabel: currentDirectorLabel,
           turns: data.turns ?? [],
           verdict: data.verification ?? null,
           mode: (data.mode as WorkMode) ?? mode,
@@ -384,6 +391,7 @@ export default function OrientationPod({
           <div className="rounded-md border border-calm-border/60 bg-calm-bg/50 px-3 py-2 text-xs text-calm-muted">
             Continuing from: “{activeCycle.question.slice(0, 120)}
             {activeCycle.question.length > 120 ? '…' : ''}”
+            {activeCycle.directorLabel ? ` · directed by ${activeCycle.directorLabel}` : ''}
             {activeCycle.mode ? ` · previous mode: ${activeCycle.mode}` : ''}
           </div>
         )}
@@ -462,15 +470,16 @@ export default function OrientationPod({
       <section className="space-y-3">
         {pendingQuestion && (
           <article className="rounded-lg border border-calm-border bg-calm-surface p-4">
-            <p className="text-sm text-calm-text">{pendingQuestion}</p>
+            <p className="text-xs text-calm-muted">Directed by {currentDirectorLabel}</p>
+            <p className="mt-1 text-sm text-calm-text">{pendingQuestion}</p>
             <p className="mt-2 text-xs text-calm-muted">Swarm is working…</p>
           </article>
         )}
 
         {cycles.length > 0 && (
           <p className="text-xs text-calm-muted">
-            Prior work in this pod. Use <span className="text-calm-text">Continue</span> on any item
-            to resume that thread, or start a fresh question above.
+            Prior work in this pod. Each question shows which human Director asked it. Use{' '}
+            <span className="text-calm-text">Continue</span> to resume a thread.
           </p>
         )}
 
@@ -489,7 +498,10 @@ export default function OrientationPod({
                   onClick={() => setExpandedCycle(isExpanded ? null : i)}
                   className="min-w-0 flex-1 text-left"
                 >
-                  <p className="text-sm text-calm-text">{cycle.question}</p>
+                  <p className="text-xs text-calm-accent">
+                    Directed by {cycle.directorLabel ?? 'Director'}
+                  </p>
+                  <p className="mt-1 text-sm text-calm-text">{cycle.question}</p>
                   <p className="mt-1 text-xs text-calm-muted">
                     {cycle.mode ? `${cycle.mode} · ` : ''}
                     {cycle.turns.map((t) => t.agent).join(' → ')}
@@ -522,6 +534,15 @@ export default function OrientationPod({
 
               {isExpanded && (
                 <div className="space-y-5 border-t border-calm-border p-4">
+                  <div className="rounded-md border-l-2 border-calm-accent/40 pl-3">
+                    <p className="text-xs font-medium uppercase tracking-wide text-calm-accent">
+                      {cycle.directorLabel ?? 'Director'}
+                    </p>
+                    <p className="mt-1 text-xs text-calm-muted">Human Director</p>
+                    <p className="mt-1.5 text-sm leading-relaxed text-calm-text whitespace-pre-wrap">
+                      {cycle.question}
+                    </p>
+                  </div>
                   {cycle.turns.map((turn, j) => (
                     <AgentTurn key={j} turn={turn} />
                   ))}
