@@ -13,7 +13,11 @@ export type SwarmTurn = {
   collapsed_reasoning?: string;
 };
 type Verdict = { verdict: string; score: number | null; pov_eligible: boolean };
-type Cycle = { question: string; turns: SwarmTurn[]; verdict?: Verdict | null };
+type Cycle = {
+  question: string;
+  turns: SwarmTurn[];
+  verdict?: Verdict | null;
+};
 
 type OrientationPodProps = {
   podId: string;
@@ -24,8 +28,6 @@ type OrientationPodProps = {
   userEmail: string;
 };
 
-// Extracts @Veritas's trailing {...} verdict block for the collapsed-card badge.
-// Used for cycles reloaded from history, where we only have the raw turn text.
 function parseVerdictFromVeritasText(text: string | undefined): Verdict | null {
   if (!text) return null;
   const match = text.match(/\{[^{}]*\}(?![\s\S]*\{[^{}]*\})/);
@@ -42,8 +44,20 @@ function parseVerdictFromVeritasText(text: string | undefined): Verdict | null {
   }
 }
 
-// Pre-account calmed landing (outline §5): mission first, one gentle call to action,
-// no raw message firehose. This is the Orientation Mini-Pod's entry surface.
+function buildPriorContext(cycles: Cycle[]): string {
+  if (cycles.length === 0) return '';
+  // Most recent cycle first in state, so reverse for chronological context
+  const chronological = [...cycles].reverse();
+  return chronological
+    .map((c) => {
+      const agentBits = c.turns
+        .map((t) => `${t.agent}: ${t.summary_conclusion.slice(0, 500)}`)
+        .join('\n');
+      return `Director: ${c.question}\n${agentBits}`;
+    })
+    .join('\n\n---\n\n');
+}
+
 export default function OrientationPod({
   podId,
   podName,
@@ -61,23 +75,32 @@ export default function OrientationPod({
       ),
     }))
   );
-  const [expandedCycle, setExpandedCycle] = useState<number | null>(0);
+  const [expandedCycle, setExpandedCycle] = useState<number | null>(
+    initialCycles.length > 0 ? 0 : null
+  );
   const [pendingQuestion, setPendingQuestion] = useState<string | null>(null);
   const [status, setStatus] = useState<
     'idle' | 'thinking' | 'error' | 'limit_reached' | 'duplicate'
   >('idle');
   const [remainingPrompts, setRemainingPrompts] = useState(initialRemainingPrompts);
+  const [isFollowUp, setIsFollowUp] = useState(false);
 
   async function handleDirect() {
     if (!directorPrompt.trim() || remainingPrompts <= 0) return;
     setStatus('thinking');
     setPendingQuestion(directorPrompt);
 
+    const priorContext = isFollowUp ? buildPriorContext(cycles) : '';
+
     try {
       const res = await fetch('/api/orchestra', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ director_prompt: directorPrompt, pod_id: podId }),
+        body: JSON.stringify({
+          director_prompt: directorPrompt,
+          pod_id: podId,
+          prior_context: priorContext || undefined,
+        }),
       });
 
       if (res.status === 429) {
@@ -95,12 +118,17 @@ export default function OrientationPod({
 
       const data = await res.json();
       setCycles((prev) => [
-        { question: directorPrompt, turns: data.turns ?? [], verdict: data.verification ?? null },
+        {
+          question: directorPrompt,
+          turns: data.turns ?? [],
+          verdict: data.verification ?? null,
+        },
         ...prev,
       ]);
       setExpandedCycle(0);
       setPendingQuestion(null);
       setDirectorPrompt('');
+      setIsFollowUp(true); // next prompt can continue the thread
       setRemainingPrompts((n) => Math.max(n - 1, 0));
       setStatus('idle');
     } catch {
@@ -109,11 +137,18 @@ export default function OrientationPod({
     }
   }
 
+  function startFresh() {
+    setIsFollowUp(false);
+    setDirectorPrompt('');
+  }
+
   async function handleSignOut() {
     const supabase = createClient();
     await supabase.auth.signOut();
     window.location.href = '/login';
   }
+
+  const latestCycle = cycles[0];
 
   return (
     <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-8 px-6 py-16">
@@ -143,6 +178,7 @@ export default function OrientationPod({
         <p className="text-xs text-calm-muted">
           Every question below — yours and the swarm&apos;s — is saved to this pod. Nothing
           here is verified or worth Proof-of-Value until @Veritas says so at the end of a cycle.
+          You can continue a thread or start a fresh question.
         </p>
       </header>
 
@@ -152,37 +188,64 @@ export default function OrientationPod({
       </div>
 
       <section className="space-y-3">
-        <label htmlFor="director-prompt" className="text-sm text-calm-muted">
-          Direct the swarm
-        </label>
+        <div className="flex items-center justify-between">
+          <label htmlFor="director-prompt" className="text-sm text-calm-muted">
+            {isFollowUp ? 'Continue the conversation' : 'Direct the swarm'}
+          </label>
+          {isFollowUp && cycles.length > 0 && (
+            <button
+              onClick={startFresh}
+              className="text-xs text-calm-muted underline hover:text-calm-text"
+            >
+              Start a fresh question instead
+            </button>
+          )}
+        </div>
+
+        {isFollowUp && latestCycle && (
+          <div className="rounded-md border border-calm-border/60 bg-calm-bg/50 px-3 py-2 text-xs text-calm-muted">
+            Continuing from: “{latestCycle.question.slice(0, 120)}
+            {latestCycle.question.length > 120 ? '…' : ''}”
+          </div>
+        )}
+
         <textarea
           id="director-prompt"
           className="w-full rounded-lg border border-calm-border bg-calm-surface p-3 text-sm text-calm-text focus:border-calm-accent focus:outline-none"
           rows={3}
-          placeholder={SUGGESTED_PROMPT}
+          placeholder={
+            isFollowUp
+              ? 'Add a follow-up, new angle, clarification, or additional context…'
+              : SUGGESTED_PROMPT
+          }
           value={directorPrompt}
           onChange={(e) => setDirectorPrompt(e.target.value)}
         />
         <p className="text-xs text-calm-muted">
-          Write your own question — a question that&apos;s already been verified here won&apos;t
-          earn Proof-of-Value again, but you&apos;re welcome to retry one that didn&apos;t pass.
+          {isFollowUp
+            ? 'This prompt will be sent with the previous cycle as context so the swarm can build on what already happened.'
+            : 'Write your own question — a question that has already been verified here won’t earn Proof-of-Value again, but you can retry one that didn’t pass.'}
         </p>
         <button
           onClick={handleDirect}
           disabled={status === 'thinking' || remainingPrompts <= 0 || !directorPrompt.trim()}
           className="rounded-lg bg-calm-accent px-4 py-2 text-sm font-medium text-calm-bg disabled:opacity-40"
         >
-          {status === 'thinking' ? 'Swarm is working…' : 'Send to swarm'}
+          {status === 'thinking'
+            ? 'Swarm is working…'
+            : isFollowUp
+              ? 'Continue with swarm'
+              : 'Send to swarm'}
         </button>
         {status === 'error' && (
           <p className="text-sm text-red-400">
-            The orchestra service isn&apos;t reachable yet — this is expected until
+            The orchestra service isn’t reachable yet — this is expected until
             apps/orchestra is running and its API keys are configured.
           </p>
         )}
         {status === 'limit_reached' && (
           <p className="text-sm text-calm-muted">
-            You&apos;ve used today&apos;s free Director prompts. They reset at 00:00 UTC.
+            You’ve used today’s free Director prompts. They reset at 00:00 UTC.
           </p>
         )}
         {status === 'duplicate' && (
@@ -209,7 +272,12 @@ export default function OrientationPod({
                 onClick={() => setExpandedCycle(isExpanded ? null : i)}
                 className="flex w-full items-start justify-between gap-3 p-4 text-left"
               >
-                <p className="text-sm text-calm-text">{cycle.question}</p>
+                <div className="space-y-1">
+                  <p className="text-sm text-calm-text">{cycle.question}</p>
+                  <p className="text-xs text-calm-muted">
+                    {cycle.turns.map((t) => t.agent).join(' → ')}
+                  </p>
+                </div>
                 <span
                   className={`shrink-0 rounded-full border px-2 py-0.5 text-xs ${
                     cycle.verdict?.pov_eligible
@@ -222,25 +290,29 @@ export default function OrientationPod({
               </button>
 
               {isExpanded && (
-                <div className="space-y-3 border-t border-calm-border p-4">
+                <div className="space-y-4 border-t border-calm-border p-4">
                   {cycle.turns.map((turn, j) => (
-                    <div key={j}>
-                      <p className="text-xs uppercase tracking-wide text-calm-accent">
+                    <div key={j} className="space-y-1">
+                      <p className="text-xs font-medium uppercase tracking-wide text-calm-accent">
                         {turn.agent}
                       </p>
-                      <p className="mt-1 text-sm text-calm-text">{turn.summary_conclusion}</p>
+                      <p className="text-sm leading-relaxed text-calm-text whitespace-pre-wrap">
+                        {turn.summary_conclusion}
+                      </p>
                     </div>
                   ))}
                   {cycle.verdict && (
-                    <p
-                      className={`text-xs ${
-                        cycle.verdict.pov_eligible ? 'text-calm-accent' : 'text-calm-muted'
+                    <div
+                      className={`rounded-md px-3 py-2 text-xs ${
+                        cycle.verdict.pov_eligible
+                          ? 'bg-calm-accent/10 text-calm-accent'
+                          : 'bg-calm-bg text-calm-muted'
                       }`}
                     >
                       {cycle.verdict.pov_eligible
-                        ? `Verified — Proof-of-Value awarded to @Synthetix.`
-                        : `Not verified — no Proof-of-Value awarded.`}
-                    </p>
+                        ? `Verified — Proof-of-Value awarded. Score ${cycle.verdict.score}/100.`
+                        : `Not yet verified — no Proof-of-Value awarded. Score ${cycle.verdict.score ?? '—'}/100. You can continue the thread to improve it.`}
+                    </div>
                   )}
                 </div>
               )}
@@ -251,4 +323,3 @@ export default function OrientationPod({
     </main>
   );
 }
-
