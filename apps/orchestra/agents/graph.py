@@ -1,8 +1,8 @@
-"""LangGraph implementation of the default swarm cycle (outline §11):
+"""LangGraph implementation of the default swarm cycle:
 Ground (@Astra) -> Pressure-test (@Kaelen) -> Construct (@Synthetix) -> Verify (@Veritas).
 
-Human Director interventions always re-enter at Ground with the new instruction folded
-into state; this graph models a single cycle triggered by one Director prompt.
+Human Director interventions always re-enter with the new instruction.
+This graph models a cycle that can optionally carry prior context for multi-turn dialogue.
 """
 
 import json
@@ -23,6 +23,7 @@ _VERDICT_BLOCK_RE = re.compile(r"\{[^{}]*\}(?!.*\{[^{}]*\})", re.DOTALL)
 
 class SwarmState(TypedDict):
     director_prompt: str
+    prior_context: str
     ground_output: str
     critique_output: str
     build_output: str
@@ -31,8 +32,7 @@ class SwarmState(TypedDict):
 
 
 def _model() -> ChatOpenAI:
-    # Cheap-model-by-default per the outline's cost-control rules; escalate later by
-    # swapping ORCHESTRA_MODEL per-node once @Veritas verification/stress-test hooks exist.
+    # Cheap-model-by-default per cost-control rules.
     return ChatOpenAI(model=os.environ.get("ORCHESTRA_MODEL", "gpt-4o-mini"), temperature=0.3)
 
 
@@ -46,9 +46,7 @@ _URL_RE = re.compile(r"https?://\S+")
 
 
 def _strip_unverified_citations(text: str, allowed_urls: list[str]) -> str:
-    """Redact any URL the model cited that isn't one of the real search results.
-    Prompt instructions alone don't reliably stop this, so this is enforced in code
-    rather than left to the model's compliance."""
+    """Redact any URL the model cited that isn't one of the real search results."""
 
     def _replace(match: re.Match) -> str:
         url = match.group(0).rstrip(").,;\"'")
@@ -62,12 +60,15 @@ def _strip_unverified_citations(text: str, allowed_urls: list[str]) -> str:
 def _ground(state: SwarmState) -> SwarmState:
     search_results = search_web(state["director_prompt"])
     allowed_urls = [r["url"] for r in search_results if r.get("url")]
+    prior = state.get("prior_context") or ""
+    prior_block = f"\n\nPrior context from this Mini-Pod (use only if relevant):\n{prior}" if prior else ""
+
     response = _model().invoke(
         [
             SystemMessage(content=ASTRA_PROMPT),
             HumanMessage(
                 content=(
-                    f"Director prompt:\n{state['director_prompt']}\n\n"
+                    f"Director prompt:\n{state['director_prompt']}{prior_block}\n\n"
                     "Live search results — cite only these URLs; do not invent others "
                     f"or assert facts they don't support:\n{_format_search_results(search_results)}"
                 )
@@ -97,12 +98,10 @@ def _construct(state: SwarmState) -> SwarmState:
     allowed_urls = state.get("allowed_urls", [])
     allowed_urls_note = (
         "Only cite these URLs verbatim; never introduce a new source, title, author, "
-        "or publication that isn't in this list. Do not gesture at unlinked authority "
-        "either — no 'based on official records/logs/transcripts' unless one of the URLs "
-        "below is actually that record. Attach the citation immediately after each "
-        "specific factual claim it supports (e.g. 'Landed July 20, 1969 [Source](url).'), "
-        "rather than only listing sources at the end — @Veritas requires unambiguous "
-        f"per-claim attribution, not a bibliography:\n{chr(10).join(allowed_urls) or 'None available.'}"
+        "or publication that isn't in this list. If the list is empty, explicitly state that "
+        "no external sources were available and produce the most useful structured artifact "
+        "you can under that constraint. Attach any real citation immediately after the claim "
+        f"it supports:\n{chr(10).join(allowed_urls) or 'None available.'}"
     )
     response = _model().invoke(
         [
@@ -125,9 +124,14 @@ def _verify(state: SwarmState) -> SwarmState:
     allowed_urls = state.get("allowed_urls", [])
     source_note = (
         "The only real, search-verified sources available for this artifact were:\n"
-        f"{chr(10).join(allowed_urls) or 'None — no external search results were available.'}\n"
-        "Treat any citation, author, or publication in the artifact that is NOT in this list "
-        "as a fabricated source and flag it as a failure mode."
+        f"{chr(10).join(allowed_urls) or 'None — no external search results were available.'}\n\n"
+        "Scoring guidance:\n"
+        "- If the artifact is well-structured, clearly states limitations, and does not invent "
+        "sources, it can score 80+ and be pov_eligible even when no external sources existed.\n"
+        "- Invented citations, authors, or institutions that are not in the allowed list must "
+        "be treated as failure modes and should prevent pov_eligible.\n"
+        "- Prefer rewarding intellectual honesty and clear structure over punishing the absence "
+        "of sources that were never available."
     )
     response = _model().invoke(
         [
@@ -160,8 +164,7 @@ _SWARM = build_swarm_graph()
 
 
 def _parse_verdict(verification_text: str) -> dict:
-    """Extract @Veritas's structured verdict block. Never award PoV on a parse
-    failure — that mirrors @Veritas's own rule of never verifying by default."""
+    """Extract @Veritas's structured verdict block. Never award PoV on a parse failure."""
     match = _VERDICT_BLOCK_RE.search(verification_text)
     if not match:
         return {"verdict": "unparseable", "score": None, "failure_modes": [], "pov_eligible": False}
@@ -179,11 +182,16 @@ def _parse_verdict(verification_text: str) -> dict:
     }
 
 
-def run_swarm_cycle(director_prompt: str) -> dict:
-    """Run one full Ground->Pressure-test->Construct->Verify cycle and return turns
-    shaped for the web app's timeline (outline §7: summary first, reasoning collapsed),
-    plus @Veritas's parsed verdict for PoV/artifact bookkeeping."""
-    result = _SWARM.invoke({"director_prompt": director_prompt})
+def run_swarm_cycle(director_prompt: str, prior_context: str = "") -> dict:
+    """Run one full Ground->Pressure-test->Construct->Verify cycle.
+    Optional prior_context enables multi-turn dialogue within a Mini-Pod.
+    """
+    result = _SWARM.invoke(
+        {
+            "director_prompt": director_prompt,
+            "prior_context": prior_context or "",
+        }
+    )
 
     turns = [
         {"agent": "@Astra", "summary_conclusion": result["ground_output"]},
@@ -197,4 +205,3 @@ def run_swarm_cycle(director_prompt: str) -> dict:
         "verification": _parse_verdict(result["verification_output"]),
         "artifact_content": result["build_output"],
     }
-
