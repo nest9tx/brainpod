@@ -36,6 +36,21 @@ type PendingInvite = {
   expires_at: string;
 };
 
+type SentInvite = {
+  id: string;
+  pod_id: string;
+  invited_email: string;
+  expires_at: string;
+};
+
+type Collaborator = {
+  permission_id: string;
+  pod_id: string;
+  profile_id: string;
+  can_direct: boolean;
+  display_name: string;
+};
+
 function studyStatusLabel(artifact: Artifact): { label: string; tone: string } {
   if (artifact.is_verified) {
     return {
@@ -67,14 +82,20 @@ export default function PodManager({
   categories,
   initialArtifacts,
   pendingInvites = [],
+  pendingSent = [],
+  collaborators: initialCollaborators = [],
 }: {
   initialPods: Pod[];
   categories: Category[];
   initialArtifacts: Artifact[];
   pendingInvites?: PendingInvite[];
+  pendingSent?: SentInvite[];
+  collaborators?: Collaborator[];
 }) {
   const [pods, setPods] = useState(initialPods);
   const [artifacts, setArtifacts] = useState(initialArtifacts);
+  const [sentInvites, setSentInvites] = useState(pendingSent);
+  const [collaborators, setCollaborators] = useState(initialCollaborators);
   const [summaryDrafts, setSummaryDrafts] = useState<Record<string, string>>(
     Object.fromEntries(initialArtifacts.map((artifact) => [artifact.id, artifact.public_summary ?? '']))
   );
@@ -185,6 +206,17 @@ export default function PodManager({
     } else {
       setLastInviteUrlByPod((current) => ({ ...current, [podId]: data.invite_url }));
       setInviteEmailByPod((current) => ({ ...current, [podId]: '' }));
+      setSentInvites((current) => [
+        {
+          id: data.invite.id,
+          pod_id: data.invite.pod_id,
+          invited_email: data.invite.invited_email,
+          expires_at: data.invite.expires_at,
+        },
+        ...current.filter(
+          (i) => !(i.pod_id === data.invite.pod_id && i.invited_email === data.invite.invited_email)
+        ),
+      ]);
       if (data.email?.sent) {
         setInfo(`Invitation emailed to ${data.invite.invited_email}.`);
       } else {
@@ -196,6 +228,65 @@ export default function PodManager({
     setBusy(false);
   }
 
+  async function revokeInvite(inviteId: string) {
+    setBusy(true);
+    setError('');
+    setInfo('');
+    const response = await fetch('/api/workspace/invites', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: inviteId }),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      setError(data.detail ?? data.error ?? 'Could not revoke the invitation.');
+    } else {
+      setSentInvites((current) => current.filter((i) => i.id !== inviteId));
+      setInfo('Pending invitation revoked.');
+    }
+    setBusy(false);
+  }
+
+  async function removeCollaborator(podId: string, profileId: string) {
+    setBusy(true);
+    setError('');
+    setInfo('');
+    const response = await fetch('/api/workspace/collaborators', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pod_id: podId, profile_id: profileId }),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      setError(data.detail ?? data.error ?? 'Could not remove access.');
+    } else {
+      setCollaborators((current) =>
+        current.filter((c) => !(c.pod_id === podId && c.profile_id === profileId))
+      );
+      setInfo('Access removed. Historical work in the pod is preserved.');
+    }
+    setBusy(false);
+  }
+
+  async function leavePod(podId: string) {
+    setBusy(true);
+    setError('');
+    setInfo('');
+    const response = await fetch('/api/workspace/collaborators', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pod_id: podId }),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      setError(data.detail ?? data.error ?? 'Could not leave the pod.');
+    } else {
+      setPods((current) => current.filter((p) => p.id !== podId));
+      setInfo('You left the shared pod. Your prior directed work remains in its history.');
+    }
+    setBusy(false);
+  }
+
   return (
     <>
       {pendingInvites.length > 0 && (
@@ -203,9 +294,7 @@ export default function PodManager({
           <h2 className="text-sm font-medium text-calm-text">Pending invitations for you</h2>
           {pendingInvites.map((invite) => (
             <div key={invite.id} className="flex flex-wrap items-center justify-between gap-3 text-sm">
-              <span className="text-calm-muted">
-                {invite.pod_name}
-              </span>
+              <span className="text-calm-muted">{invite.pod_name}</span>
               <Link
                 href={`/invite/${invite.token}`}
                 className="text-calm-accent underline hover:text-calm-text"
@@ -218,122 +307,180 @@ export default function PodManager({
       )}
 
       <section className="space-y-3" aria-label="Your Mini-Pods">
-        {pods.map((pod) => (
-          <article
-            key={pod.id}
-            className="space-y-3 rounded-lg border border-calm-border bg-calm-surface p-5"
-          >
-            <div className="flex items-start justify-between gap-5">
-              <div className="min-w-0 space-y-2">
-                {editingId === pod.id ? (
-                  <div className="flex flex-wrap items-center gap-2">
-                    <input
-                      value={editingName}
-                      onChange={(event) => setEditingName(event.target.value)}
-                      className="rounded border border-calm-border bg-calm-bg px-2 py-1 text-sm text-calm-text"
-                      maxLength={100}
-                    />
-                    <select
-                      value={editingCategory}
-                      onChange={(event) => setEditingCategory(event.target.value)}
-                      className="rounded border border-calm-border bg-calm-bg px-2 py-1 text-sm text-calm-text"
-                    >
-                      {categories.map((category) => (
-                        <option key={category.slug} value={category.slug}>
-                          {category.display_name}
-                        </option>
-                      ))}
-                    </select>
-                    <button
-                      onClick={() => renamePod(pod.id)}
-                      disabled={busy}
-                      className="text-xs text-calm-accent underline"
-                    >
-                      Save
-                    </button>
-                    <button
-                      onClick={() => setEditingId(null)}
-                      className="text-xs text-calm-muted underline"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                ) : (
-                  <div className="flex flex-wrap items-center gap-3">
-                    <h2 className="text-base font-medium text-calm-text">{pod.name}</h2>
-                    {pod.is_owner && (
+        {pods.map((pod) => {
+          const podPending = sentInvites.filter((i) => i.pod_id === pod.id);
+          const podMembers = collaborators.filter((c) => c.pod_id === pod.id);
+          return (
+            <article
+              key={pod.id}
+              className="space-y-3 rounded-lg border border-calm-border bg-calm-surface p-5"
+            >
+              <div className="flex items-start justify-between gap-5">
+                <div className="min-w-0 space-y-2">
+                  {editingId === pod.id ? (
+                    <div className="flex flex-wrap items-center gap-2">
+                      <input
+                        value={editingName}
+                        onChange={(event) => setEditingName(event.target.value)}
+                        className="rounded border border-calm-border bg-calm-bg px-2 py-1 text-sm text-calm-text"
+                        maxLength={100}
+                      />
+                      <select
+                        value={editingCategory}
+                        onChange={(event) => setEditingCategory(event.target.value)}
+                        className="rounded border border-calm-border bg-calm-bg px-2 py-1 text-sm text-calm-text"
+                      >
+                        {categories.map((category) => (
+                          <option key={category.slug} value={category.slug}>
+                            {category.display_name}
+                          </option>
+                        ))}
+                      </select>
                       <button
-                        onClick={() => {
-                          setEditingId(pod.id);
-                          setEditingName(pod.name);
-                          setEditingCategory(pod.category_slug);
-                        }}
+                        onClick={() => renamePod(pod.id)}
+                        disabled={busy}
+                        className="text-xs text-calm-accent underline"
+                      >
+                        Save
+                      </button>
+                      <button
+                        onClick={() => setEditingId(null)}
                         className="text-xs text-calm-muted underline"
                       >
-                        Rename
+                        Cancel
                       </button>
-                    )}
-                    <span className="rounded-full border border-calm-accent px-2 py-0.5 text-xs text-calm-accent">
-                      {categories.find((category) => category.slug === pod.category_slug)
-                        ?.display_name ?? pod.category_slug}
-                    </span>
-                    <span className="rounded-full border border-calm-border px-2 py-0.5 text-xs text-calm-muted">
-                      {pod.is_owner ? 'Owner' : 'Shared with you'}
-                    </span>
-                  </div>
-                )}
-                <p className="max-w-xl text-sm leading-relaxed text-calm-muted">{pod.rolling_summary}</p>
-              </div>
-              <a
-                href={`/?pod=${pod.id}`}
-                className="shrink-0 rounded-lg bg-calm-accent px-4 py-2 text-sm font-medium text-calm-bg"
-              >
-                Open pod
-              </a>
-            </div>
-
-            {pod.is_owner && (
-              <div className="space-y-2 border-t border-calm-border pt-3">
-                <p className="text-xs text-calm-muted">
-                  Invite a collaborator by email (5 invites/day). They can sign up with that email if
-                  needed.
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  <input
-                    type="email"
-                    value={inviteEmailByPod[pod.id] ?? ''}
-                    onChange={(event) =>
-                      setInviteEmailByPod((current) => ({
-                        ...current,
-                        [pod.id]: event.target.value,
-                      }))
-                    }
-                    placeholder="collaborator@example.com"
-                    className="min-w-0 flex-1 rounded border border-calm-border bg-calm-bg px-3 py-1.5 text-sm text-calm-text"
-                  />
-                  <button
-                    onClick={() => sendInvite(pod.id)}
-                    disabled={busy || !(inviteEmailByPod[pod.id] ?? '').trim()}
-                    className="rounded border border-calm-border px-3 py-1.5 text-xs text-calm-text disabled:opacity-40"
-                  >
-                    Send invite
-                  </button>
+                    </div>
+                  ) : (
+                    <div className="flex flex-wrap items-center gap-3">
+                      <h2 className="text-base font-medium text-calm-text">{pod.name}</h2>
+                      {pod.is_owner && (
+                        <button
+                          onClick={() => {
+                            setEditingId(pod.id);
+                            setEditingName(pod.name);
+                            setEditingCategory(pod.category_slug);
+                          }}
+                          className="text-xs text-calm-muted underline"
+                        >
+                          Rename
+                        </button>
+                      )}
+                      <span className="rounded-full border border-calm-accent px-2 py-0.5 text-xs text-calm-accent">
+                        {categories.find((category) => category.slug === pod.category_slug)
+                          ?.display_name ?? pod.category_slug}
+                      </span>
+                      <span className="rounded-full border border-calm-border px-2 py-0.5 text-xs text-calm-muted">
+                        {pod.is_owner ? 'Owner' : 'Shared with you'}
+                      </span>
+                    </div>
+                  )}
+                  <p className="max-w-xl text-sm leading-relaxed text-calm-muted">{pod.rolling_summary}</p>
                 </div>
-                {lastInviteUrlByPod[pod.id] && (
-                  <p className="break-all text-xs text-calm-muted">
-                    Invite link:{' '}
-                    <a
-                      href={lastInviteUrlByPod[pod.id]}
-                      className="text-calm-accent underline"
+                <div className="flex shrink-0 flex-col items-end gap-2">
+                  <a
+                    href={`/?pod=${pod.id}`}
+                    className="rounded-lg bg-calm-accent px-4 py-2 text-sm font-medium text-calm-bg"
+                  >
+                    Open pod
+                  </a>
+                  {!pod.is_owner && (
+                    <button
+                      onClick={() => leavePod(pod.id)}
+                      disabled={busy}
+                      className="text-xs text-calm-muted underline hover:text-calm-text"
                     >
-                      {lastInviteUrlByPod[pod.id]}
-                    </a>
-                  </p>
-                )}
+                      Leave pod
+                    </button>
+                  )}
+                </div>
               </div>
-            )}
-          </article>
-        ))}
+
+              {pod.is_owner && (
+                <div className="space-y-3 border-t border-calm-border pt-3">
+                  <p className="text-xs text-calm-muted">
+                    Inviting shares this <span className="text-calm-text">entire pod</span> (all
+                    studies and history), not a single question. Limit 5 invites/day. Removing access
+                    keeps recorded work.
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    <input
+                      type="email"
+                      value={inviteEmailByPod[pod.id] ?? ''}
+                      onChange={(event) =>
+                        setInviteEmailByPod((current) => ({
+                          ...current,
+                          [pod.id]: event.target.value,
+                        }))
+                      }
+                      placeholder="collaborator@example.com"
+                      className="min-w-0 flex-1 rounded border border-calm-border bg-calm-bg px-3 py-1.5 text-sm text-calm-text"
+                    />
+                    <button
+                      onClick={() => sendInvite(pod.id)}
+                      disabled={busy || !(inviteEmailByPod[pod.id] ?? '').trim()}
+                      className="rounded border border-calm-border px-3 py-1.5 text-xs text-calm-text disabled:opacity-40"
+                    >
+                      Send invite
+                    </button>
+                  </div>
+                  {lastInviteUrlByPod[pod.id] && (
+                    <p className="break-all text-xs text-calm-muted">
+                      Invite link:{' '}
+                      <a href={lastInviteUrlByPod[pod.id]} className="text-calm-accent underline">
+                        {lastInviteUrlByPod[pod.id]}
+                      </a>
+                    </p>
+                  )}
+
+                  {podPending.length > 0 && (
+                    <div className="space-y-1">
+                      <p className="text-xs font-medium text-calm-text">Pending invites</p>
+                      {podPending.map((invite) => (
+                        <div
+                          key={invite.id}
+                          className="flex flex-wrap items-center justify-between gap-2 text-xs text-calm-muted"
+                        >
+                          <span>{invite.invited_email}</span>
+                          <button
+                            onClick={() => revokeInvite(invite.id)}
+                            disabled={busy}
+                            className="underline hover:text-calm-text"
+                          >
+                            Revoke
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {podMembers.length > 0 && (
+                    <div className="space-y-1">
+                      <p className="text-xs font-medium text-calm-text">Collaborators</p>
+                      {podMembers.map((member) => (
+                        <div
+                          key={member.permission_id}
+                          className="flex flex-wrap items-center justify-between gap-2 text-xs text-calm-muted"
+                        >
+                          <span>
+                            {member.display_name}
+                            {member.can_direct ? ' · can direct' : ' · view'}
+                          </span>
+                          <button
+                            onClick={() => removeCollaborator(pod.id, member.profile_id)}
+                            disabled={busy}
+                            className="underline hover:text-calm-text"
+                          >
+                            Remove access
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </article>
+          );
+        })}
       </section>
 
       {(error || info) && (
@@ -345,7 +492,8 @@ export default function PodManager({
           <div className="space-y-1">
             <h2 className="text-lg font-medium text-calm-text">Studies in your pods</h2>
             <p className="text-xs text-calm-muted">
-              Review collaborative work across your Mini-Pods. Use Continue to open the originating pod.
+              Review collaborative work across your Mini-Pods. Use Continue to open the originating
+              pod.
             </p>
           </div>
 
