@@ -1,14 +1,15 @@
-"""LangGraph implementation of the default swarm cycle:
-Ground (@Astra) -> Pressure-test (@Kaelen) -> Construct (@Synthetix) -> Verify (@Veritas).
+"""LangGraph implementation of the swarm cycle with work-mode awareness.
 
-Human Director interventions always re-enter with the new instruction.
-This graph models a cycle that can optionally carry prior context for multi-turn dialogue.
+Modes:
+- brainstorm: open, collective perspectives; light verification
+- assist: help the Director think/structure; moderate verification
+- construct: full Ground → Challenge → Construct → Verify with PoV possible
 """
 
 import json
 import os
 import re
-from typing import TypedDict
+from typing import Literal, TypedDict
 
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
@@ -17,13 +18,15 @@ from langgraph.graph import END, StateGraph
 from .prompts import ASTRA_PROMPT, KAELEN_PROMPT, SYNTHETIX_PROMPT, VERITAS_PROMPT
 from .tools import search_web
 
-# Matches the last {...} block in @Veritas's reply, tolerating a ```json fence around it.
+WorkMode = Literal["brainstorm", "assist", "construct"]
+
 _VERDICT_BLOCK_RE = re.compile(r"\{[^{}]*\}(?!.*\{[^{}]*\})", re.DOTALL)
 
 
 class SwarmState(TypedDict):
     director_prompt: str
     prior_context: str
+    mode: WorkMode
     ground_output: str
     critique_output: str
     build_output: str
@@ -31,23 +34,25 @@ class SwarmState(TypedDict):
     allowed_urls: list[str]
 
 
-def _model() -> ChatOpenAI:
-    # Cheap-model-by-default per cost-control rules.
-    return ChatOpenAI(model=os.environ.get("ORCHESTRA_MODEL", "gpt-4o-mini"), temperature=0.3)
+def _model(temperature: float = 0.3) -> ChatOpenAI:
+    return ChatOpenAI(
+        model=os.environ.get("ORCHESTRA_MODEL", "gpt-4o-mini"),
+        temperature=temperature,
+    )
 
 
 def _format_search_results(results: list[dict]) -> str:
     if not results:
         return "No external search results are available for this request."
-    return "\n".join(f"- {r['title']} ({r['url']}): {r['content'][:400]}" for r in results)
+    return "\n".join(
+        f"- {r['title']} ({r['url']}): {r['content'][:400]}" for r in results
+    )
 
 
 _URL_RE = re.compile(r"https?://\S+")
 
 
 def _strip_unverified_citations(text: str, allowed_urls: list[str]) -> str:
-    """Redact any URL the model cited that isn't one of the real search results."""
-
     def _replace(match: re.Match) -> str:
         url = match.group(0).rstrip(").,;\"'")
         if any(url.startswith(allowed) or allowed.startswith(url) for allowed in allowed_urls):
@@ -57,20 +62,52 @@ def _strip_unverified_citations(text: str, allowed_urls: list[str]) -> str:
     return _URL_RE.sub(_replace, text)
 
 
+def _mode_instruction(mode: WorkMode) -> str:
+    if mode == "brainstorm":
+        return (
+            "WORK MODE: Brainstorm.\n"
+            "Priority is open, collective perspective-taking. Offer multiple angles, "
+            "possibilities, and gentle provocations. Do not force a single correct answer. "
+            "Avoid heavy scoring pressure. Intellectual honesty still matters; do not invent sources."
+        )
+    if mode == "assist":
+        return (
+            "WORK MODE: Assist / Think with me.\n"
+            "Help the Director clarify, structure, or pressure-test an idea they already have. "
+            "Be supportive and concrete. Surface assumptions and useful next questions. "
+            "Moderate grounding is enough; do not over-index on external search."
+        )
+    return (
+        "WORK MODE: Construct & Verify.\n"
+        "Produce a clear, structured artifact that can stand as advanced work. "
+        "Full rigor applies. Ground carefully, pressure-test, construct cleanly, and submit "
+        "to verification. PoV is possible when the work is honest and advances understanding."
+    )
+
+
 def _ground(state: SwarmState) -> SwarmState:
-    search_results = search_web(state["director_prompt"])
+    mode = state.get("mode") or "construct"
+    # Search is most useful for construct; lighter for brainstorm/assist
+    should_search = mode == "construct" or mode == "assist"
+    search_results = search_web(state["director_prompt"]) if should_search else []
     allowed_urls = [r["url"] for r in search_results if r.get("url")]
     prior = state.get("prior_context") or ""
-    prior_block = f"\n\nPrior context from this Mini-Pod (use only if relevant):\n{prior}" if prior else ""
+    prior_block = (
+        f"\n\nPrior context from this Mini-Pod (use only if relevant):\n{prior}"
+        if prior
+        else ""
+    )
 
-    response = _model().invoke(
+    response = _model(temperature=0.5 if mode == "brainstorm" else 0.3).invoke(
         [
             SystemMessage(content=ASTRA_PROMPT),
             HumanMessage(
                 content=(
+                    f"{_mode_instruction(mode)}\n\n"
                     f"Director prompt:\n{state['director_prompt']}{prior_block}\n\n"
-                    "Live search results — cite only these URLs; do not invent others "
-                    f"or assert facts they don't support:\n{_format_search_results(search_results)}"
+                    "Live search results (cite only these if you use external sources; "
+                    "do not invent others):\n"
+                    f"{_format_search_results(search_results)}"
                 )
             ),
         ]
@@ -80,13 +117,15 @@ def _ground(state: SwarmState) -> SwarmState:
 
 
 def _pressure_test(state: SwarmState) -> SwarmState:
-    response = _model().invoke(
+    mode = state.get("mode") or "construct"
+    response = _model(temperature=0.5 if mode == "brainstorm" else 0.3).invoke(
         [
             SystemMessage(content=KAELEN_PROMPT),
             HumanMessage(
                 content=(
+                    f"{_mode_instruction(mode)}\n\n"
                     f"Director prompt:\n{state['director_prompt']}\n\n"
-                    f"@Astra's grounding:\n{state['ground_output']}"
+                    f"@Astra's contribution:\n{state['ground_output']}"
                 )
             ),
         ]
@@ -95,23 +134,32 @@ def _pressure_test(state: SwarmState) -> SwarmState:
 
 
 def _construct(state: SwarmState) -> SwarmState:
+    mode = state.get("mode") or "construct"
     allowed_urls = state.get("allowed_urls", [])
-    allowed_urls_note = (
-        "Only cite these URLs verbatim; never introduce a new source, title, author, "
-        "or publication that isn't in this list. If the list is empty, explicitly state that "
-        "no external sources were available and produce the most useful structured artifact "
-        "you can under that constraint. Attach any real citation immediately after the claim "
-        f"it supports:\n{chr(10).join(allowed_urls) or 'None available.'}"
-    )
-    response = _model().invoke(
+    if mode == "brainstorm":
+        source_note = (
+            "This is a brainstorm. Focus on useful perspectives and possibilities. "
+            "If you reference external material, only use the allowed list below or clearly "
+            "mark ideas as speculative. Do not invent sources.\n"
+            f"Allowed URLs: {chr(10).join(allowed_urls) or 'None'}"
+        )
+    else:
+        source_note = (
+            "Only cite these URLs verbatim; never invent sources. If the list is empty, "
+            "state that clearly and still produce the most useful structured contribution "
+            f"you can:\n{chr(10).join(allowed_urls) or 'None available.'}"
+        )
+
+    response = _model(temperature=0.5 if mode == "brainstorm" else 0.3).invoke(
         [
             SystemMessage(content=SYNTHETIX_PROMPT),
             HumanMessage(
                 content=(
+                    f"{_mode_instruction(mode)}\n\n"
                     f"Director prompt:\n{state['director_prompt']}\n\n"
-                    f"@Astra's grounding:\n{state['ground_output']}\n\n"
-                    f"@Kaelen's critique:\n{state['critique_output']}\n\n"
-                    f"{allowed_urls_note}"
+                    f"@Astra:\n{state['ground_output']}\n\n"
+                    f"@Kaelen:\n{state['critique_output']}\n\n"
+                    f"{source_note}"
                 )
             ),
         ]
@@ -121,23 +169,41 @@ def _construct(state: SwarmState) -> SwarmState:
 
 
 def _verify(state: SwarmState) -> SwarmState:
+    mode = state.get("mode") or "construct"
     allowed_urls = state.get("allowed_urls", [])
+
+    if mode == "brainstorm":
+        guidance = (
+            "MODE = Brainstorm. Evaluation should focus on whether the contribution "
+            "offers useful, honest perspectives. Do not demand heavy external citation. "
+            "Invented sources are still a failure. pov_eligible should usually be false "
+            "unless the brainstorm produced a clearly citable advancement. "
+            "Scores in the 60–85 range for good collaborative thinking are appropriate."
+        )
+    elif mode == "assist":
+        guidance = (
+            "MODE = Assist. Evaluate clarity, usefulness, and intellectual honesty. "
+            "Moderate grounding is enough. Invented sources remain a failure. "
+            "pov_eligible can be true for genuinely helpful structured assistance."
+        )
+    else:
+        guidance = (
+            "MODE = Construct & Verify. Full rigor. Reward clear structure, explicit "
+            "limitations, and honest use of sources. Invented sources block pov_eligible. "
+            "Well-structured work that states limitations can still score 80+ and be "
+            "pov_eligible even when external sources were unavailable."
+        )
+
     source_note = (
-        "The only real, search-verified sources available for this artifact were:\n"
-        f"{chr(10).join(allowed_urls) or 'None — no external search results were available.'}\n\n"
-        "Scoring guidance:\n"
-        "- If the artifact is well-structured, clearly states limitations, and does not invent "
-        "sources, it can score 80+ and be pov_eligible even when no external sources existed.\n"
-        "- Invented citations, authors, or institutions that are not in the allowed list must "
-        "be treated as failure modes and should prevent pov_eligible.\n"
-        "- Prefer rewarding intellectual honesty and clear structure over punishing the absence "
-        "of sources that were never available."
+        f"Allowed sources for this cycle:\n{chr(10).join(allowed_urls) or 'None'}\n\n"
+        f"{guidance}"
     )
+
     response = _model().invoke(
         [
             SystemMessage(content=VERITAS_PROMPT),
             HumanMessage(
-                content=f"Artifact to verify:\n{state['build_output']}\n\n{source_note}"
+                content=f"Artifact / contribution to evaluate:\n{state['build_output']}\n\n{source_note}"
             ),
         ]
     )
@@ -164,15 +230,24 @@ _SWARM = build_swarm_graph()
 
 
 def _parse_verdict(verification_text: str) -> dict:
-    """Extract @Veritas's structured verdict block. Never award PoV on a parse failure."""
     match = _VERDICT_BLOCK_RE.search(verification_text)
     if not match:
-        return {"verdict": "unparseable", "score": None, "failure_modes": [], "pov_eligible": False}
+        return {
+            "verdict": "unparseable",
+            "score": None,
+            "failure_modes": [],
+            "pov_eligible": False,
+        }
 
     try:
         parsed = json.loads(match.group(0))
     except json.JSONDecodeError:
-        return {"verdict": "unparseable", "score": None, "failure_modes": [], "pov_eligible": False}
+        return {
+            "verdict": "unparseable",
+            "score": None,
+            "failure_modes": [],
+            "pov_eligible": False,
+        }
 
     return {
         "verdict": parsed.get("verdict", "unparseable"),
@@ -182,14 +257,20 @@ def _parse_verdict(verification_text: str) -> dict:
     }
 
 
-def run_swarm_cycle(director_prompt: str, prior_context: str = "") -> dict:
-    """Run one full Ground->Pressure-test->Construct->Verify cycle.
-    Optional prior_context enables multi-turn dialogue within a Mini-Pod.
-    """
+def run_swarm_cycle(
+    director_prompt: str,
+    prior_context: str = "",
+    mode: WorkMode = "construct",
+) -> dict:
+    """Run a mode-aware swarm cycle."""
+    if mode not in ("brainstorm", "assist", "construct"):
+        mode = "construct"
+
     result = _SWARM.invoke(
         {
             "director_prompt": director_prompt,
             "prior_context": prior_context or "",
+            "mode": mode,
         }
     )
 
@@ -204,4 +285,5 @@ def run_swarm_cycle(director_prompt: str, prior_context: str = "") -> dict:
         "turns": turns,
         "verification": _parse_verdict(result["verification_output"]),
         "artifact_content": result["build_output"],
+        "mode": mode,
     }
