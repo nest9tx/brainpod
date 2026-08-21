@@ -163,8 +163,6 @@ export default function OrientationPod({
   function startFresh() {
     setIsFollowUp(false);
     setDirectorPrompt('');
-    // Mode stays as last selection so the Director can change it if desired,
-    // but the selector remains fully visible and interactive.
   }
 
   async function handleSignOut() {
@@ -176,6 +174,7 @@ export default function OrientationPod({
   const latestCycle = cycles[0];
   const activeModeLabel =
     MODE_OPTIONS.find((o) => o.id === mode)?.label ?? 'Construct & Verify';
+  const isFirstExperience = cycles.length === 0 && !pendingQuestion;
 
   return (
     <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-8 px-6 py-16">
@@ -212,6 +211,18 @@ export default function OrientationPod({
         {remainingPrompts} free Director prompt{remainingPrompts === 1 ? '' : 's'} remaining
         today · resets 00:00 UTC
       </div>
+
+      {isFirstExperience && (
+        <div className="rounded-lg border border-calm-accent/30 bg-calm-accent/5 p-4 text-sm text-calm-text">
+          <p className="font-medium">Welcome, Director.</p>
+          <p className="mt-2 text-calm-muted">
+            This is your Orientation Mini-Pod. Start with any mode that fits what you need right now.
+            Brainstorm for open exploration, Assist when you already have an idea to refine, or
+            Construct when you want a structured result that can be verified. You can always continue
+            a thread or begin again. The swarm is here to collaborate, not to test you.
+          </p>
+        </div>
+      )}
 
       {/* Work Mode Selector — always visible */}
       <section className="space-y-3">
