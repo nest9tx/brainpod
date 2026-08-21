@@ -49,6 +49,31 @@ function parseVerdictFromVeritasText(text: string | undefined): Verdict | null {
   }
 }
 
+function formatCyclePlainText(cycle: Cycle, podName: string): string {
+  const lines = [
+    `Brainpod · ${podName}`,
+    `Directed by: ${cycle.directorLabel ?? 'Director'}`,
+    cycle.mode ? `Mode: ${cycle.mode}` : null,
+    cycle.verdict
+      ? `Verification: ${cycle.verdict.score ?? '—'}/100 · ${cycle.verdict.pov_eligible ? 'verified' : 'not verified'}`
+      : null,
+    '',
+    'Director question:',
+    cycle.question,
+    '',
+  ].filter((line) => line !== null) as string[];
+
+  for (const turn of cycle.turns) {
+    lines.push(`${turn.agent}:`);
+    lines.push(turn.summary_conclusion);
+    lines.push('');
+  }
+
+  lines.push('---');
+  lines.push('Shared from Brainpod (LuminaNova.org 501(c)(3)). Attribution is collective; not independently verified evidence solely because it was copied.');
+  return lines.join('\n');
+}
+
 function buildPriorContextFromCycle(cycle: Cycle, directorNote?: string): string {
   const agentBits = cycle.turns
     .map((t) => `${t.agent}: ${t.summary_conclusion.slice(0, 600)}`)
@@ -219,6 +244,7 @@ export default function OrientationPod({
   const [resumeCycleIndex, setResumeCycleIndex] = useState<number | null>(
     initialCycles.length > 0 ? 0 : null
   );
+  const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
 
   async function handleDirect() {
     if (!directorPrompt.trim() || remainingPrompts <= 0) return;
@@ -265,7 +291,7 @@ export default function OrientationPod({
       setCycles((prev) => [
         {
           question: directorPrompt,
-          directorLabel: currentDirectorLabel,
+          directorLabel: data.director_label || currentDirectorLabel,
           turns: data.turns ?? [],
           verdict: data.verification ?? null,
           mode: (data.mode as WorkMode) ?? mode,
@@ -304,6 +330,20 @@ export default function OrientationPod({
     setDirectorNote('');
     if (typeof window !== 'undefined') {
       window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }
+
+  async function copyCycle(index: number) {
+    const cycle = cycles[index];
+    if (!cycle) return;
+    const text = formatCyclePlainText(cycle, podName);
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedIndex(index);
+      window.setTimeout(() => setCopiedIndex((current) => (current === index ? null : current)), 2000);
+    } catch {
+      // Fallback for older browsers
+      window.prompt('Copy this study thread:', text);
     }
   }
 
@@ -479,7 +519,8 @@ export default function OrientationPod({
         {cycles.length > 0 && (
           <p className="text-xs text-calm-muted">
             Prior work in this pod. Each question shows which human Director asked it. Use{' '}
-            <span className="text-calm-text">Continue</span> to resume a thread.
+            <span className="text-calm-text">Continue</span> to resume, or{' '}
+            <span className="text-calm-text">Copy thread</span> for a plain-text takeaway.
           </p>
         )}
 
@@ -534,6 +575,16 @@ export default function OrientationPod({
 
               {isExpanded && (
                 <div className="space-y-5 border-t border-calm-border p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-xs text-calm-muted">Expanded thread</p>
+                    <button
+                      type="button"
+                      onClick={() => copyCycle(i)}
+                      className="text-xs text-calm-accent underline hover:text-calm-text"
+                    >
+                      {copiedIndex === i ? 'Copied' : 'Copy thread'}
+                    </button>
+                  </div>
                   <div className="rounded-md border-l-2 border-calm-accent/40 pl-3">
                     <p className="text-xs font-medium uppercase tracking-wide text-calm-accent">
                       {cycle.directorLabel ?? 'Director'}
