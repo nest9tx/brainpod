@@ -7,6 +7,8 @@ import Link from 'next/link';
 const SUGGESTED_PROMPT =
   'Help me understand how a Ground → Pressure-test → Construct → Verify cycle would tackle a small, well-defined problem.';
 
+type WorkMode = 'brainstorm' | 'assist' | 'construct';
+
 export type SwarmTurn = {
   agent: string;
   summary_conclusion: string;
@@ -17,6 +19,7 @@ type Cycle = {
   question: string;
   turns: SwarmTurn[];
   verdict?: Verdict | null;
+  mode?: WorkMode;
 };
 
 type OrientationPodProps = {
@@ -46,7 +49,6 @@ function parseVerdictFromVeritasText(text: string | undefined): Verdict | null {
 
 function buildPriorContext(cycles: Cycle[]): string {
   if (cycles.length === 0) return '';
-  // Most recent cycle first in state, so reverse for chronological context
   const chronological = [...cycles].reverse();
   return chronological
     .map((c) => {
@@ -58,6 +60,24 @@ function buildPriorContext(cycles: Cycle[]): string {
     .join('\n\n---\n\n');
 }
 
+const MODE_OPTIONS: { id: WorkMode; label: string; description: string }[] = [
+  {
+    id: 'brainstorm',
+    label: 'Brainstorm',
+    description: 'Open perspectives and collective exploration. Light scoring.',
+  },
+  {
+    id: 'assist',
+    label: 'Assist / Think with me',
+    description: 'Help clarify, structure, or pressure-test an idea you already have.',
+  },
+  {
+    id: 'construct',
+    label: 'Construct & Verify',
+    description: 'Produce a structured artifact that can earn Proof-of-Value.',
+  },
+];
+
 export default function OrientationPod({
   podId,
   podName,
@@ -67,6 +87,7 @@ export default function OrientationPod({
   userEmail,
 }: OrientationPodProps) {
   const [directorPrompt, setDirectorPrompt] = useState('');
+  const [mode, setMode] = useState<WorkMode>('construct');
   const [cycles, setCycles] = useState<Cycle[]>(
     initialCycles.map((cycle) => ({
       ...cycle,
@@ -100,6 +121,7 @@ export default function OrientationPod({
           director_prompt: directorPrompt,
           pod_id: podId,
           prior_context: priorContext || undefined,
+          mode,
         }),
       });
 
@@ -122,13 +144,14 @@ export default function OrientationPod({
           question: directorPrompt,
           turns: data.turns ?? [],
           verdict: data.verification ?? null,
+          mode: data.mode ?? mode,
         },
         ...prev,
       ]);
       setExpandedCycle(0);
       setPendingQuestion(null);
       setDirectorPrompt('');
-      setIsFollowUp(true); // next prompt can continue the thread
+      setIsFollowUp(true);
       setRemainingPrompts((n) => Math.max(n - 1, 0));
       setStatus('idle');
     } catch {
@@ -176,9 +199,8 @@ export default function OrientationPod({
         </h1>
         {podSummary && <p className="text-sm leading-relaxed text-calm-muted">{podSummary}</p>}
         <p className="text-xs text-calm-muted">
-          Every question below — yours and the swarm&apos;s — is saved to this pod. Nothing
-          here is verified or worth Proof-of-Value until @Veritas says so at the end of a cycle.
-          You can continue a thread or start a fresh question.
+          Choose the kind of work you want, then direct the swarm. You can continue a thread
+          or start fresh. Nothing earns Proof-of-Value until @Veritas says so.
         </p>
       </header>
 
@@ -186,6 +208,28 @@ export default function OrientationPod({
         {remainingPrompts} free Director prompt{remainingPrompts === 1 ? '' : 's'} remaining
         today · resets 00:00 UTC
       </div>
+
+      {/* Work Mode Selector */}
+      <section className="space-y-3">
+        <p className="text-sm text-calm-muted">What kind of work is this?</p>
+        <div className="grid gap-2 sm:grid-cols-3">
+          {MODE_OPTIONS.map((opt) => (
+            <button
+              key={opt.id}
+              type="button"
+              onClick={() => setMode(opt.id)}
+              className={`rounded-lg border p-3 text-left transition ${
+                mode === opt.id
+                  ? 'border-calm-accent bg-calm-accent/10 text-calm-text'
+                  : 'border-calm-border bg-calm-surface text-calm-muted hover:border-calm-accent/50'
+              }`}
+            >
+              <div className="text-sm font-medium">{opt.label}</div>
+              <div className="mt-1 text-xs opacity-80">{opt.description}</div>
+            </button>
+          ))}
+        </div>
+      </section>
 
       <section className="space-y-3">
         <div className="flex items-center justify-between">
@@ -216,7 +260,11 @@ export default function OrientationPod({
           placeholder={
             isFollowUp
               ? 'Add a follow-up, new angle, clarification, or additional context…'
-              : SUGGESTED_PROMPT
+              : mode === 'brainstorm'
+                ? 'What would you like to explore or brainstorm together?'
+                : mode === 'assist'
+                  ? 'What idea or problem would you like help thinking through?'
+                  : SUGGESTED_PROMPT
           }
           value={directorPrompt}
           onChange={(e) => setDirectorPrompt(e.target.value)}
@@ -224,7 +272,11 @@ export default function OrientationPod({
         <p className="text-xs text-calm-muted">
           {isFollowUp
             ? 'This prompt will be sent with the previous cycle as context so the swarm can build on what already happened.'
-            : 'Write your own question — a question that has already been verified here won’t earn Proof-of-Value again, but you can retry one that didn’t pass.'}
+            : mode === 'brainstorm'
+              ? 'Brainstorm mode prioritizes open perspectives over scoring.'
+              : mode === 'assist'
+                ? 'Assist mode focuses on clarifying and strengthening your thinking.'
+                : 'Construct mode aims for a structured artifact that can be verified.'}
         </p>
         <button
           onClick={handleDirect}
@@ -275,6 +327,7 @@ export default function OrientationPod({
                 <div className="space-y-1">
                   <p className="text-sm text-calm-text">{cycle.question}</p>
                   <p className="text-xs text-calm-muted">
+                    {cycle.mode ? `${cycle.mode} · ` : ''}
                     {cycle.turns.map((t) => t.agent).join(' → ')}
                   </p>
                 </div>
