@@ -192,6 +192,7 @@ export default function OrientationPod({
   const [directorPrompt, setDirectorPrompt] = useState('');
   const [directorNote, setDirectorNote] = useState('');
   const [mode, setMode] = useState<WorkMode>('construct');
+  const [liveSummary, setLiveSummary] = useState(podSummary);
   const [cycles, setCycles] = useState<Cycle[]>(
     initialCycles.map((cycle) => ({
       ...cycle,
@@ -264,6 +265,9 @@ export default function OrientationPod({
         },
         ...prev,
       ]);
+      if (typeof data.rolling_summary === 'string' && data.rolling_summary.trim()) {
+        setLiveSummary(data.rolling_summary);
+      }
       setExpandedCycle(0);
       setResumeCycleIndex(0);
       setPendingQuestion(null);
@@ -332,7 +336,7 @@ export default function OrientationPod({
         <h1 className="text-2xl font-medium text-calm-text">
           Human direction. Verified results. No cash-out, no gaming the ledger.
         </h1>
-        {podSummary && <p className="text-sm leading-relaxed text-calm-muted">{podSummary}</p>}
+        {liveSummary && <p className="text-sm leading-relaxed text-calm-muted">{liveSummary}</p>}
         <p className="text-xs text-calm-muted">
           Choose the kind of work you want, then direct the swarm. You can continue a thread
           or start fresh. Nothing earns Proof-of-Value until @Veritas says so.
