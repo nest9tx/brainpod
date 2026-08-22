@@ -9,8 +9,11 @@ html {
 
 body {
   background-color: theme('colors.calm.bg');
+  background-image: theme('backgroundImage.ambient-radial');
+  background-attachment: fixed;
   color: theme('colors.calm.text');
   overflow-x: hidden;
+  min-height: 100vh;
 }
 
 body,
@@ -20,12 +23,31 @@ textarea {
   -webkit-font-smoothing: antialiased;
 }
 
+::selection {
+  background: rgba(110, 200, 184, 0.25);
+  color: theme('colors.calm.text');
+}
+
 /* Long URLs / unbroken strings must wrap inside cards */
 article p,
 article a,
 main p {
   overflow-wrap: anywhere;
   word-break: break-word;
+}
+
+@layer components {
+  .panel {
+    @apply rounded-xl border border-calm-border bg-calm-surface shadow-panel;
+  }
+
+  .panel-elevated {
+    @apply rounded-xl border border-calm-border bg-calm-surface-elevated shadow-panel;
+  }
+
+  .chip {
+    @apply inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium tracking-wide;
+  }
 }
 
 @media (max-width: 640px) {
