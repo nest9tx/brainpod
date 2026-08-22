@@ -4,7 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { AGENT_PROFILE_ID_BY_NAME, AGENT_PROFILE_IDS } from '@/lib/constants';
 
 type SwarmTurn = { agent: string; summary_conclusion: string };
-ptype Verdict = {
+type Verdict = {
   verdict: string;
   score: number | null;
   failure_modes: string[];
