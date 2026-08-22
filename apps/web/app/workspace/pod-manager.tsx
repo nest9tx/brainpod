@@ -492,8 +492,8 @@ export default function PodManager({
           <div className="space-y-1">
             <h2 className="text-lg font-medium text-calm-text">Studies in your pods</h2>
             <p className="text-xs text-calm-muted">
-              Review collaborative work across your Mini-Pods. Use Continue to open the originating
-              pod.
+              Review collaborative work across your Mini-Pods. Verified attempts are highlighted.
+              Use Continue to open the originating pod, or View on Explore after release.
             </p>
           </div>
 
@@ -587,6 +587,12 @@ export default function PodManager({
                           <div className="mt-2 flex flex-wrap items-center gap-4">
                             {artifact.public_release ? (
                               <>
+                                <a
+                                  href={`/explore/study/${artifact.id}`}
+                                  className="text-xs text-calm-accent underline hover:text-calm-text"
+                                >
+                                  View on Explore
+                                </a>
                                 <button
                                   onClick={() => setArtifactRelease(artifact, true)}
                                   disabled={busy}
