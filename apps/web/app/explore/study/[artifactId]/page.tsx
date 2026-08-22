@@ -4,6 +4,44 @@ import { createClient } from '@/lib/supabase/server';
 import SiteNav from '@/components/site-nav';
 import SiteFooter from '@/components/site-footer';
 import PublicInsights from '@/components/public-insights';
+import CopyStudyButton from '@/components/copy-study-button';
+
+function formatPublicStudyText(args: {
+  question: string | null;
+  podName: string;
+  category: string;
+  publicSummary: string | null;
+  content: string | null;
+  isVerified: boolean;
+  score: number | null;
+}): string {
+  const lines = [
+    `Brainpod · Public commons · ${args.category}`,
+    `From: ${args.podName}`,
+    args.isVerified
+      ? `Verification: ${args.score ?? '—'}/100 · verified`
+      : typeof args.score === 'number'
+        ? `Verification: ${args.score}/100 · not verified`
+        : 'Verification: not verified',
+    '',
+    'Director question:',
+    args.question ?? 'Released study',
+    '',
+    'Director release note:',
+    args.publicSummary?.trim() || 'No public summary was provided for this release.',
+  ];
+
+  if (args.content?.trim()) {
+    lines.push('', 'Constructed artifact:', args.content.trim());
+  }
+
+  lines.push(
+    '',
+    '---',
+    'Shared from Brainpod (LuminaNova.org 501(c)(3)). Attribution is collective; public insights and release notes are not independently verified evidence solely because they appear here.'
+  );
+  return lines.join('\n');
+}
 
 export default async function PublicStudyPage({ params }: { params: { artifactId: string } }) {
   const supabase = createClient();
@@ -28,6 +66,7 @@ export default async function PublicStudyPage({ params }: { params: { artifactId
     .eq('slug', pod.category_slug)
     .maybeSingle();
 
+  const categoryName = category?.display_name ?? pod.category_slug;
   const releasedAt = artifact.created_at
     ? new Date(artifact.created_at).toLocaleDateString(undefined, {
         year: 'numeric',
@@ -36,14 +75,27 @@ export default async function PublicStudyPage({ params }: { params: { artifactId
       })
     : null;
 
+  const copyText = formatPublicStudyText({
+    question: artifact.question,
+    podName: pod.name,
+    category: categoryName,
+    publicSummary: artifact.public_summary,
+    content: artifact.content,
+    isVerified: artifact.is_verified,
+    score: artifact.veritas_score,
+  });
+
   return (
     <main className="mx-auto flex min-h-screen max-w-3xl flex-col gap-8 px-4 py-10 sm:px-6 sm:py-16">
       <SiteNav variant={user ? 'app' : 'public'} userEmail={user?.email ?? undefined} />
 
       <header className="space-y-3">
-        <p className="text-sm uppercase tracking-widest text-calm-muted">
-          Brainpod public commons · {category?.display_name ?? pod.category_slug}
-        </p>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <p className="text-sm uppercase tracking-widest text-calm-muted">
+            Brainpod public commons · {categoryName}
+          </p>
+          <CopyStudyButton text={copyText} />
+        </div>
         <h1 className="text-2xl font-medium leading-snug text-calm-text break-words">
           {artifact.question ?? 'Released study'}
         </h1>
