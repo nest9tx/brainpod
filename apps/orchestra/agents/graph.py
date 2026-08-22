@@ -62,6 +62,32 @@ def _strip_unverified_citations(text: str, allowed_urls: list[str]) -> str:
     return _URL_RE.sub(_replace, text)
 
 
+def _search_query(director_prompt: str, prior_context: str) -> str:
+    """Build a search query that is not starved when the Director prompt is thin
+    but attachment/prior context carries the real subject matter."""
+    prompt = (director_prompt or "").strip()
+    prior = (prior_context or "").strip()
+
+    # Prefer a meaningful prompt; enrich from prior/attachment when short
+    if len(prompt) >= 80:
+        return prompt[:400]
+
+    pieces = [prompt] if prompt else []
+    if prior:
+        # Pull attachment body or note lines without dumping the entire history
+        for marker in ("---attachment---", "ATTACHMENT:", "NOTE:", "Director-supplied context:"):
+            if marker in prior:
+                idx = prior.find(marker)
+                snippet = prior[idx : idx + 600]
+                pieces.append(snippet)
+                break
+        else:
+            pieces.append(prior[:400])
+
+    query = " ".join(p for p in pieces if p).strip()
+    return (query or prompt or "collaborative research")[:500]
+
+
 def _mode_instruction(mode: WorkMode) -> str:
     if mode == "brainstorm":
         return (
@@ -87,13 +113,13 @@ def _mode_instruction(mode: WorkMode) -> str:
 
 def _ground(state: SwarmState) -> SwarmState:
     mode = state.get("mode") or "construct"
-    # Search is most useful for construct; lighter for brainstorm/assist
-    should_search = mode == "construct" or mode == "assist"
-    search_results = search_web(state["director_prompt"]) if should_search else []
-    allowed_urls = [r["url"] for r in search_results if r.get("url")]
     prior = state.get("prior_context") or ""
+    should_search = mode == "construct" or mode == "assist"
+    query = _search_query(state["director_prompt"], prior)
+    search_results = search_web(query) if should_search else []
+    allowed_urls = [r["url"] for r in search_results if r.get("url")]
     prior_block = (
-        f"\n\nPrior context from this Mini-Pod (use only if relevant):\n{prior}"
+        f"\n\nPrior context / Director-supplied materials (legitimate evidence for this cycle):\n{prior}"
         if prior
         else ""
     )
@@ -105,8 +131,8 @@ def _ground(state: SwarmState) -> SwarmState:
                 content=(
                     f"{_mode_instruction(mode)}\n\n"
                     f"Director prompt:\n{state['director_prompt']}{prior_block}\n\n"
-                    "Live search results (cite only these if you use external sources; "
-                    "do not invent others):\n"
+                    "Live search results (if you cite external web URLs, only use these; "
+                    "do not invent others). Director-supplied materials above are also valid grounding:\n"
                     f"{_format_search_results(search_results)}"
                 )
             ),
@@ -136,18 +162,26 @@ def _pressure_test(state: SwarmState) -> SwarmState:
 def _construct(state: SwarmState) -> SwarmState:
     mode = state.get("mode") or "construct"
     allowed_urls = state.get("allowed_urls", [])
+    prior = state.get("prior_context") or ""
+    prior_note = (
+        f"Director-supplied materials (attachments, notes, prior context) are legitimate inputs:\n{prior[:2000]}\n\n"
+        if prior
+        else ""
+    )
     if mode == "brainstorm":
         source_note = (
             "This is a brainstorm. Focus on useful perspectives and possibilities. "
-            "If you reference external material, only use the allowed list below or clearly "
-            "mark ideas as speculative. Do not invent sources.\n"
+            "If you reference external web material, only use the allowed URL list below or clearly "
+            "mark ideas as speculative. Do not invent sources. Named institutions without invented "
+            "URLs are fine when framed carefully.\n"
             f"Allowed URLs: {chr(10).join(allowed_urls) or 'None'}"
         )
     else:
         source_note = (
-            "Only cite these URLs verbatim; never invent sources. If the list is empty, "
-            "state that clearly and still produce the most useful structured contribution "
-            f"you can:\n{chr(10).join(allowed_urls) or 'None available.'}"
+            "Only cite external web URLs from this allowed list; never invent URLs, papers, or DOIs. "
+            "Director-supplied materials may be used freely. If the allowed URL list is empty, "
+            "state that clearly and still produce the most useful structured contribution you can.\n"
+            f"Allowed URLs:\n{chr(10).join(allowed_urls) or 'None available.'}"
         )
 
     response = _model(temperature=0.5 if mode == "brainstorm" else 0.3).invoke(
@@ -157,6 +191,7 @@ def _construct(state: SwarmState) -> SwarmState:
                 content=(
                     f"{_mode_instruction(mode)}\n\n"
                     f"Director prompt:\n{state['director_prompt']}\n\n"
+                    f"{prior_note}"
                     f"@Astra:\n{state['ground_output']}\n\n"
                     f"@Kaelen:\n{state['critique_output']}\n\n"
                     f"{source_note}"
@@ -171,31 +206,44 @@ def _construct(state: SwarmState) -> SwarmState:
 def _verify(state: SwarmState) -> SwarmState:
     mode = state.get("mode") or "construct"
     allowed_urls = state.get("allowed_urls", [])
+    prior = state.get("prior_context") or ""
 
     if mode == "brainstorm":
         guidance = (
             "MODE = Brainstorm. Evaluation should focus on whether the contribution "
             "offers useful, honest perspectives. Do not demand heavy external citation. "
-            "Invented sources are still a failure. pov_eligible should usually be false "
+            "Invented specific sources are still a failure. pov_eligible should usually be false "
             "unless the brainstorm produced a clearly citable advancement. "
             "Scores in the 60–85 range for good collaborative thinking are appropriate."
         )
     elif mode == "assist":
         guidance = (
             "MODE = Assist. Evaluate clarity, usefulness, and intellectual honesty. "
-            "Moderate grounding is enough. Invented sources remain a failure. "
+            "Moderate grounding is enough. Invented specific sources remain a failure. "
             "pov_eligible can be true for genuinely helpful structured assistance."
         )
     else:
         guidance = (
             "MODE = Construct & Verify. Full rigor. Reward clear structure, explicit "
-            "limitations, and honest use of sources. Invented sources block pov_eligible. "
-            "Well-structured work that states limitations can still score 80+ and be "
-            "pov_eligible even when external sources were unavailable."
+            "limitations, and honest use of Director materials and/or allowed URLs. "
+            "Invented specific papers/URLs/DOIs block pov_eligible. "
+            "Well-structured work grounded in Director attachments or that states limitations "
+            "can still score 80+ and be pov_eligible even when external search was limited. "
+            "Do not reject solely because agents named institutions (IPCC, NASA, etc.) without "
+            "a matching Tavily URL, unless they invented specific papers or URLs."
         )
 
+    director_materials = (
+        f"Director-supplied materials were provided for this cycle (length {len(prior)} chars). "
+        "Treat that as legitimate evidence.\n"
+        if prior.strip()
+        else "No Director attachment/prior materials were provided for this cycle.\n"
+    )
+
     source_note = (
-        f"Allowed sources for this cycle:\n{chr(10).join(allowed_urls) or 'None'}\n\n"
+        f"{director_materials}"
+        f"Allowed external URLs for this cycle (live search only):\n"
+        f"{chr(10).join(allowed_urls) or 'None'}\n\n"
         f"{guidance}"
     )
 
