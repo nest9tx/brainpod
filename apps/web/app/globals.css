@@ -13,7 +13,6 @@ body {
   overflow-x: hidden;
 }
 
-/* Prefer system text rendering on iOS Safari */
 body,
 button,
 input,
@@ -21,7 +20,14 @@ textarea {
   -webkit-font-smoothing: antialiased;
 }
 
-/* Avoid iOS zoom-on-focus for form fields under 16px */
+/* Long URLs / unbroken strings must wrap inside cards */
+article p,
+article a,
+main p {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
 @media (max-width: 640px) {
   input,
   textarea,
@@ -29,7 +35,6 @@ textarea {
     font-size: 16px !important;
   }
 
-  /* Comfortable tap targets without a full redesign */
   button,
   a {
     min-height: 44px;
@@ -45,7 +50,6 @@ textarea {
   }
 }
 
-/* Safe areas for notched iPhones */
 @supports (padding: max(0px)) {
   body {
     padding-left: max(0px, env(safe-area-inset-left));
