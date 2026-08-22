@@ -86,12 +86,12 @@ export default async function PublicStudyPage({ params }: { params: { artifactId
   });
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-3xl flex-col gap-8 px-4 py-10 sm:px-6 sm:py-16">
+    <main className="mx-auto flex min-h-screen max-w-3xl flex-col gap-6 px-4 py-8 sm:gap-8 sm:px-6 sm:py-12">
       <SiteNav variant={user ? 'app' : 'public'} userEmail={user?.email ?? undefined} />
 
-      <header className="space-y-3">
+      <header className="space-y-3 rounded-xl border border-calm-border-soft bg-calm-surface/60 p-4 shadow-glow sm:p-5">
         <div className="flex flex-wrap items-start justify-between gap-3">
-          <p className="text-sm uppercase tracking-widest text-calm-muted">
+          <p className="text-xs uppercase tracking-[0.2em] text-calm-muted">
             Brainpod public commons · {categoryName}
           </p>
           <CopyStudyButton text={copyText} />
@@ -105,7 +105,7 @@ export default async function PublicStudyPage({ params }: { params: { artifactId
         </p>
       </header>
 
-      <section className="space-y-4 rounded-lg border border-calm-border bg-calm-surface p-6">
+      <section className="panel space-y-4 p-5 sm:p-6">
         <div>
           <h2 className="text-sm font-medium text-calm-text">Director release note</h2>
           <p className="mt-2 text-sm leading-relaxed text-calm-text whitespace-pre-wrap break-words">
@@ -135,7 +135,7 @@ export default async function PublicStudyPage({ params }: { params: { artifactId
       </section>
 
       {artifact.content?.trim() && (
-        <section className="space-y-3 rounded-lg border border-calm-border bg-calm-surface p-6">
+        <section className="panel space-y-3 p-5 sm:p-6">
           <div className="space-y-1">
             <h2 className="text-sm font-medium text-calm-text">Constructed artifact</h2>
             <p className="text-xs text-calm-muted">
@@ -155,7 +155,7 @@ export default async function PublicStudyPage({ params }: { params: { artifactId
         currentUserId={user?.id}
       />
 
-      <section className="space-y-2 border-t border-calm-border pt-6">
+      <section className="space-y-2 border-t border-calm-border-soft pt-6">
         <h2 className="text-sm font-medium text-calm-text">How to read this page</h2>
         <p className="text-xs leading-relaxed text-calm-muted">
           Explore list cards stay short on purpose. This detail page is the full public observation
