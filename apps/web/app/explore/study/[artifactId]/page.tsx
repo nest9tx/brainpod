@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import SiteNav from '@/components/site-nav';
 import SiteFooter from '@/components/site-footer';
+import PublicInsights from '@/components/public-insights';
 
 export default async function PublicStudyPage({ params }: { params: { artifactId: string } }) {
   const supabase = createClient();
@@ -36,14 +37,14 @@ export default async function PublicStudyPage({ params }: { params: { artifactId
     : null;
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-3xl flex-col gap-8 px-6 py-16">
+    <main className="mx-auto flex min-h-screen max-w-3xl flex-col gap-8 px-4 py-10 sm:px-6 sm:py-16">
       <SiteNav variant={user ? 'app' : 'public'} userEmail={user?.email ?? undefined} />
 
       <header className="space-y-3">
         <p className="text-sm uppercase tracking-widest text-calm-muted">
           Brainpod public commons · {category?.display_name ?? pod.category_slug}
         </p>
-        <h1 className="text-2xl font-medium leading-snug text-calm-text">
+        <h1 className="text-2xl font-medium leading-snug text-calm-text break-words">
           {artifact.question ?? 'Released study'}
         </h1>
         <p className="text-sm text-calm-muted">
@@ -55,7 +56,7 @@ export default async function PublicStudyPage({ params }: { params: { artifactId
       <section className="space-y-4 rounded-lg border border-calm-border bg-calm-surface p-6">
         <div>
           <h2 className="text-sm font-medium text-calm-text">Director release note</h2>
-          <p className="mt-2 text-sm leading-relaxed text-calm-text whitespace-pre-wrap">
+          <p className="mt-2 text-sm leading-relaxed text-calm-text whitespace-pre-wrap break-words">
             {artifact.public_summary?.trim()
               ? artifact.public_summary
               : 'No public summary was provided for this release.'}
@@ -90,19 +91,25 @@ export default async function PublicStudyPage({ params }: { params: { artifactId
               Shown here because the Director released this study for public observation.
             </p>
           </div>
-          <div className="text-sm leading-relaxed text-calm-text whitespace-pre-wrap">
+          <div className="text-sm leading-relaxed text-calm-text whitespace-pre-wrap break-words">
             {artifact.content}
           </div>
         </section>
       )}
 
+      <PublicInsights
+        artifactId={artifact.id}
+        isSignedIn={!!user}
+        currentUserId={user?.id}
+      />
+
       <section className="space-y-2 border-t border-calm-border pt-6">
         <h2 className="text-sm font-medium text-calm-text">How to read this page</h2>
         <p className="text-xs leading-relaxed text-calm-muted">
           Explore list cards stay short on purpose. This detail page is the full public observation
-          surface for a single released study. Public discussion and co-contribution on released work
-          will open in a later phase; private pod threads remain private unless their owners release
-          them.
+          surface for a single released study. Public insights are optional, human-authored notes —
+          not a second verification pass and not a social scoreboard. Private pod threads remain
+          private unless their owners release them.
         </p>
       </section>
 

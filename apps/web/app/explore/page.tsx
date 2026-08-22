@@ -45,16 +45,16 @@ export default async function ExplorePage() {
     ) ?? [];
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-4xl flex-col gap-10 px-6 py-16">
+    <main className="mx-auto flex min-h-screen max-w-4xl flex-col gap-10 px-4 py-10 sm:px-6 sm:py-16">
       <SiteNav variant={user ? 'app' : 'public'} userEmail={user?.email ?? undefined} />
 
       <header className="space-y-3">
         <p className="text-sm uppercase tracking-widest text-calm-muted">Brainpod public commons</p>
         <h1 className="text-3xl font-medium text-calm-text">Explore released work</h1>
         <p className="max-w-2xl text-sm leading-relaxed text-calm-muted">
-          Short public summaries chosen by Directors. Private pod histories stay private until their
-          owners release them. Interaction on released studies will grow later; for now this is a calm
-          observation surface.
+          Short public summaries chosen by Directors. Open a study to read the full release and,
+          if you wish, leave one calm insight. Private pod histories stay private until their owners
+          release them.
         </p>
       </header>
 
