@@ -18,6 +18,19 @@ export function dailyLimitForRole(role: string | null | undefined): number {
   return TIER_DAILY_LIMITS[role] ?? TIER_DAILY_LIMITS.free_public;
 }
 
+/**
+ * Remaining Director prompts for the day.
+ * Usage is a single counter; when membership activates mid-day we reset that
+ * counter so free-tier usage never consumes the Sustaining allotment.
+ */
+export function remainingPromptsForDay(
+  role: string | null | undefined,
+  usedToday: number
+): number {
+  const limit = dailyLimitForRole(role);
+  return Math.max(limit - Math.max(0, usedToday), 0);
+}
+
 export function tierLabel(role: string | null | undefined): string {
   switch (role) {
     case 'sustaining_member':

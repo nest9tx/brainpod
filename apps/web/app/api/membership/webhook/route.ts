@@ -5,6 +5,9 @@ import { createAdminClient } from '@/lib/supabase/admin';
  * Stripe webhook: activate / deactivate Sustaining Membership on profiles.role.
  * Configure endpoint: https://www.brainpod.org/api/membership/webhook
  * Events: checkout.session.completed, customer.subscription.deleted, customer.subscription.updated
+ *
+ * On activation, today's prompt_count is reset so free-tier usage earlier the same
+ * day does not consume the Sustaining allotment.
  */
 export async function POST(request: NextRequest) {
   const secret = process.env.STRIPE_SECRET_KEY;
@@ -17,9 +20,6 @@ export async function POST(request: NextRequest) {
   const payload = await request.text();
   const sig = request.headers.get('stripe-signature');
 
-  // Prefer verified events via Stripe API retrieve when webhook secret is present.
-  // Without crypto timing-safe verify in edge, we accept only when STRIPE_WEBHOOK_SECRET
-  // is unset in early sandbox (profile_id must still be present), or when signature header exists.
   if (webhookSecret && !sig) {
     return NextResponse.json({ error: 'missing_signature' }, { status: 400 });
   }
@@ -37,32 +37,31 @@ export async function POST(request: NextRequest) {
 
   const admin = createAdminClient();
   const obj = event.data?.object ?? {};
+  const today = new Date().toISOString().slice(0, 10);
 
-  if (event.type === 'checkout.session.completed') {
-    const profileId =
-      (obj.client_reference_id as string) ||
-      ((obj.metadata as Record<string, string> | undefined)?.profile_id);
-    const customerId = obj.customer as string | undefined;
-    if (profileId) {
-      await admin
-        .from('profiles')
-        .update({
-          role: 'sustaining_member',
-          membership_status: 'active',
-          stripe_customer_id: customerId ?? null,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', profileId);
-    }
+  async function activateSustaining(profileId: string, customerId?: string) {
+    await admin
+      .from('profiles')
+      .update({
+        role: 'sustaining_member',
+        membership_status: 'active',
+        stripe_customer_id: customerId ?? null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', profileId);
+
+    // Fresh paid allotment for the rest of the UTC day.
+    await admin.from('daily_usage_logs').upsert(
+      {
+        profile_id: profileId,
+        usage_date: today,
+        prompt_count: 0,
+      },
+      { onConflict: 'profile_id,usage_date' }
+    );
   }
 
-  if (
-    event.type === 'customer.subscription.deleted' ||
-    (event.type === 'customer.subscription.updated' &&
-      (obj.status === 'canceled' || obj.status === 'unpaid'))
-  ) {
-    const profileId = (obj.metadata as Record<string, string> | undefined)?.profile_id;
-    const customerId = obj.customer as string | undefined;
+  async function deactivateMembership(profileId?: string, customerId?: string) {
     if (profileId) {
       await admin
         .from('profiles')
@@ -72,7 +71,9 @@ export async function POST(request: NextRequest) {
           updated_at: new Date().toISOString(),
         })
         .eq('id', profileId);
-    } else if (customerId) {
+      return;
+    }
+    if (customerId) {
       await admin
         .from('profiles')
         .update({
@@ -84,6 +85,26 @@ export async function POST(request: NextRequest) {
     }
   }
 
+  if (event.type === 'checkout.session.completed') {
+    const profileId =
+      (obj.client_reference_id as string) ||
+      ((obj.metadata as Record<string, string> | undefined)?.profile_id);
+    const customerId = obj.customer as string | undefined;
+    if (profileId) {
+      await activateSustaining(profileId, customerId);
+    }
+  }
+
+  if (
+    event.type === 'customer.subscription.deleted' ||
+    (event.type === 'customer.subscription.updated' &&
+      (obj.status === 'canceled' || obj.status === 'unpaid'))
+  ) {
+    const profileId = (obj.metadata as Record<string, string> | undefined)?.profile_id;
+    const customerId = obj.customer as string | undefined;
+    await deactivateMembership(profileId, customerId);
+  }
+
   if (
     event.type === 'customer.subscription.updated' &&
     (obj.status === 'active' || obj.status === 'trialing')
@@ -91,15 +112,7 @@ export async function POST(request: NextRequest) {
     const profileId = (obj.metadata as Record<string, string> | undefined)?.profile_id;
     const customerId = obj.customer as string | undefined;
     if (profileId) {
-      await admin
-        .from('profiles')
-        .update({
-          role: 'sustaining_member',
-          membership_status: 'active',
-          stripe_customer_id: customerId ?? null,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', profileId);
+      await activateSustaining(profileId, customerId);
     }
   }
 

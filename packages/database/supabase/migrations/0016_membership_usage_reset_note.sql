@@ -1,0 +1,17 @@
+-- Membership activation resets today's Director prompt usage so free-tier
+-- consumption earlier the same UTC day does not reduce the Sustaining allotment.
+-- Application behavior lives in /api/membership/webhook (prompt_count := 0).
+--
+-- Manual upgrade path (Supabase SQL editor), after setting role:
+--
+--   UPDATE profiles
+--   SET role = 'sustaining_member', membership_status = 'active'
+--   WHERE id = '<profile-uuid>';
+--
+--   INSERT INTO daily_usage_logs (profile_id, usage_date, prompt_count)
+--   VALUES ('<profile-uuid>', CURRENT_DATE, 0)
+--   ON CONFLICT (profile_id, usage_date)
+--   DO UPDATE SET prompt_count = 0;
+--
+-- No schema change required beyond 0015.
+SELECT 1;
