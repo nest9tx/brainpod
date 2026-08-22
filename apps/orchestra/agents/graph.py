@@ -224,31 +224,50 @@ def _verify(state: SwarmState) -> SwarmState:
     if mode == "brainstorm":
         guidance = (
             "MODE = Brainstorm. Focus on useful, honest perspectives. Do not demand external citations. "
-            "Director-supplied materials are enough grounding. Invented URLs are still a failure. "
+            "If Director materials were provided and the artifact uses their constraints, nodes, numbers, "
+            "or named flaws, that IS explicit grounding — do not list 'lacks grounding in Director materials' "
+            "as a failure mode. Invented URLs are still a failure. "
             "Scores 60–85 for good collaborative thinking are appropriate. pov_eligible is usually false "
             "unless the brainstorm produced a clearly advanced, citable structure."
         )
     elif mode == "assist":
         guidance = (
             "MODE = Assist. Evaluate clarity, usefulness, and intellectual honesty. "
-            "Grounding in Director materials is sufficient. Invented URLs remain a failure. "
+            "Grounding in Director materials is sufficient. If the artifact uses Director attachment facts "
+            "(constraints, metrics, named entities from the brief), treat that as explicit grounding. "
+            "Invented URLs remain a failure. "
             "pov_eligible can be true for genuinely helpful structured assistance that respects constraints."
         )
     else:
         guidance = (
             "MODE = Construct & Verify. Reward clear structure, explicit limitations, and honest use of "
             "Director materials and/or Allowed URLs. Invented specific papers/URLs/DOIs block pov_eligible. "
-            "If the artifact is well structured, uses the Director brief, flags assumptions, and does not invent "
+            "If the artifact is well structured, uses the Director brief/attachment, flags assumptions, and does not invent "
             "URLs, it can score 80+ and be pov_eligible even when Allowed URLs is empty. "
-            "Do not reject solely for naming institutions without a Tavily URL."
+            "Do not reject solely for naming institutions without a Tavily URL. "
+            "Using Director attachment facts without a formal citation block still counts as grounding."
         )
 
-    director_materials = (
-        f"Director-supplied materials were provided for this cycle (length {len(prior)} chars). "
-        "Treat that as legitimate evidence.\n"
-        if prior.strip()
-        else "No Director attachment/prior materials were provided for this cycle.\n"
-    )
+    if prior.strip():
+        # Prefer attachment body when present so Veritas can match facts the swarm used.
+        excerpt_src = prior
+        for marker in ("---attachment---", "ATTACHMENT:"):
+            if marker in prior:
+                excerpt_src = prior[prior.find(marker) :]
+                break
+        excerpt = excerpt_src[:2500]
+        director_materials = (
+            f"Director-supplied materials WERE provided for this cycle "
+            f"(length {len(prior)} chars). Treat them as legitimate evidence.\n"
+            f"Excerpt for your verification (do not invent beyond this + the artifact):\n"
+            f"---\n{excerpt}\n---\n"
+            "If the artifact discusses entities, numbers, constraints, or flaws from this excerpt, "
+            "that is explicit grounding in Director-supplied materials.\n"
+        )
+    else:
+        director_materials = (
+            "No Director attachment/prior materials were provided for this cycle.\n"
+        )
 
     source_note = (
         f"{director_materials}"
