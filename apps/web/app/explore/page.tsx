@@ -45,21 +45,25 @@ export default async function ExplorePage() {
     ) ?? [];
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-4xl flex-col gap-10 px-4 py-10 sm:px-6 sm:py-16">
+    <main className="mx-auto flex min-h-screen max-w-4xl flex-col gap-6 px-4 py-8 sm:gap-8 sm:px-6 sm:py-12">
       <SiteNav variant={user ? 'app' : 'public'} userEmail={user?.email ?? undefined} />
 
-      <header className="space-y-3">
-        <p className="text-sm uppercase tracking-widest text-calm-muted">Brainpod public commons</p>
-        <h1 className="text-3xl font-medium text-calm-text">Explore released work</h1>
+      <header className="space-y-3 rounded-xl border border-calm-border-soft bg-calm-surface/60 p-4 shadow-glow sm:p-5">
+        <p className="text-xs uppercase tracking-[0.2em] text-calm-muted">
+          Brainpod public commons
+        </p>
+        <h1 className="text-2xl font-medium leading-snug text-calm-text sm:text-3xl">
+          Explore released work
+        </h1>
         <p className="max-w-2xl text-sm leading-relaxed text-calm-muted">
-          Short public summaries chosen by Directors. Open a study to read the full release and,
-          if you wish, leave one calm insight. Private pod histories stay private until their owners
+          Short public summaries chosen by Directors. Open a study to read the full release and, if
+          you wish, leave one calm insight. Private pod histories stay private until their owners
           release them.
         </p>
       </header>
 
       {categoriesWithWork.length === 0 ? (
-        <p className="text-sm text-calm-muted">No released studies yet.</p>
+        <p className="panel p-5 text-sm text-calm-muted">No released studies yet.</p>
       ) : (
         <section className="space-y-8" aria-label="Released studies by category">
           {categoriesWithWork.map((category) => {
@@ -69,7 +73,7 @@ export default async function ExplorePage() {
             });
             return (
               <section key={category.slug} className="space-y-3">
-                <div>
+                <div className="px-1">
                   <h2 className="text-lg font-medium text-calm-text">{category.display_name}</h2>
                   {category.description && (
                     <p className="mt-1 text-sm text-calm-muted">{category.description}</p>
@@ -86,7 +90,7 @@ export default async function ExplorePage() {
                       <Link
                         key={study.id}
                         href={`/explore/study/${study.id}`}
-                        className="block rounded-lg border border-calm-border bg-calm-surface p-4 transition-colors hover:border-calm-accent"
+                        className="panel block p-4 transition-colors hover:border-calm-accent/50 hover:shadow-glow"
                       >
                         <h3 className="text-sm font-medium leading-snug text-calm-text">{title}</h3>
                         {summary && (
@@ -95,9 +99,13 @@ export default async function ExplorePage() {
                         <p className="mt-3 text-xs text-calm-muted">
                           {pod.name}
                           {' · '}
-                          {study.is_verified
-                            ? `Verified · ${study.veritas_score ?? '—'}/100`
-                            : 'Released for observation'}
+                          {study.is_verified ? (
+                            <span className="text-calm-accent">
+                              Verified · {study.veritas_score ?? '—'}/100
+                            </span>
+                          ) : (
+                            'Released for observation'
+                          )}
                         </p>
                       </Link>
                     );

@@ -4,11 +4,13 @@ import SiteFooter from '@/components/site-footer';
 
 export default function PublicHome() {
   return (
-    <main className="mx-auto flex min-h-screen max-w-3xl flex-col gap-10 px-6 py-16">
+    <main className="mx-auto flex min-h-screen max-w-3xl flex-col gap-8 px-4 py-8 sm:gap-10 sm:px-6 sm:py-12">
       <SiteNav variant="public" />
 
-      <header className="max-w-2xl space-y-4">
-        <p className="text-sm uppercase tracking-widest text-calm-muted">Public-benefit application</p>
+      <header className="max-w-2xl space-y-4 rounded-xl border border-calm-border-soft bg-calm-surface/60 p-5 shadow-glow sm:p-6">
+        <p className="text-xs uppercase tracking-[0.2em] text-calm-muted">
+          Public-benefit application
+        </p>
         <h1 className="text-3xl font-medium leading-tight text-calm-text">Brainpod</h1>
         <p className="text-lg leading-relaxed text-calm-text">
           A public-benefit application for human and AI co-creation.
@@ -36,22 +38,22 @@ export default function PublicHome() {
         </div>
       </header>
 
-      <section className="grid gap-4 sm:grid-cols-3" aria-label="How Brainpod works">
-        <article className="rounded-lg border border-calm-border bg-calm-surface p-4">
-          <h2 className="text-sm font-medium text-calm-text">Ground</h2>
+      <section className="grid gap-3 sm:grid-cols-3" aria-label="How Brainpod works">
+        <article className="panel p-4">
+          <h2 className="text-sm font-medium text-calm-astra">Ground</h2>
           <p className="mt-2 text-sm leading-relaxed text-calm-muted">
             @Astra gathers evidence and identifies sources for the question the human Director asks.
           </p>
         </article>
-        <article className="rounded-lg border border-calm-border bg-calm-surface p-4">
-          <h2 className="text-sm font-medium text-calm-text">Challenge</h2>
+        <article className="panel p-4">
+          <h2 className="text-sm font-medium text-calm-kaelen">Challenge</h2>
           <p className="mt-2 text-sm leading-relaxed text-calm-muted">
             @Kaelen tests assumptions, gaps, edge cases, and practical risks before work is treated as
             solid.
           </p>
         </article>
-        <article className="rounded-lg border border-calm-border bg-calm-surface p-4">
-          <h2 className="text-sm font-medium text-calm-text">Construct and verify</h2>
+        <article className="panel p-4">
+          <h2 className="text-sm font-medium text-calm-synthetix">Construct and verify</h2>
           <p className="mt-2 text-sm leading-relaxed text-calm-muted">
             @Synthetix builds an artifact and @Veritas checks evidence before any Proof-of-Value can
             be awarded.
@@ -59,7 +61,7 @@ export default function PublicHome() {
         </article>
       </section>
 
-      <section className="space-y-3 border-t border-calm-border pt-8">
+      <section className="panel space-y-3 p-5">
         <h2 className="text-lg font-medium text-calm-text">Why Brainpod requests sign-in</h2>
         <p className="max-w-2xl text-sm leading-relaxed text-calm-muted">
           Brainpod uses Google sign-in (or email magic links) only to authenticate you and create
@@ -79,7 +81,7 @@ export default function PublicHome() {
         </p>
       </section>
 
-      <section className="space-y-3 border-t border-calm-border pt-8">
+      <section className="panel space-y-3 p-5">
         <h2 className="text-lg font-medium text-calm-text">What you can do in Brainpod</h2>
         <ul className="max-w-2xl list-disc space-y-2 pl-5 text-sm leading-relaxed text-calm-muted">
           <li>Direct native agents through Brainstorm, Assist, or Construct &amp; Verify modes</li>
@@ -92,7 +94,7 @@ export default function PublicHome() {
       <div className="flex flex-wrap items-center gap-4">
         <Link
           href="/login"
-          className="rounded-lg bg-calm-accent px-5 py-3 text-sm font-medium text-calm-bg"
+          className="rounded-lg bg-calm-accent px-5 py-3 text-sm font-medium text-calm-bg shadow-glow"
         >
           Sign in to Brainpod
         </Link>

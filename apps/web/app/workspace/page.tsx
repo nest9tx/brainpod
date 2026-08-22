@@ -111,12 +111,12 @@ export default async function WorkspacePage() {
   }));
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-3xl flex-col gap-8 px-6 py-16">
+    <main className="mx-auto flex min-h-screen max-w-3xl flex-col gap-6 px-4 py-8 sm:gap-8 sm:px-6 sm:py-12">
       <SiteNav variant="app" userEmail={user.email ?? ''} />
 
-      <header className="space-y-3">
-        <p className="text-sm uppercase tracking-widest text-calm-muted">Brainpod workspace</p>
-        <h1 className="text-2xl font-medium text-calm-text">Your Mini-Pods</h1>
+      <header className="space-y-3 rounded-xl border border-calm-border-soft bg-calm-surface/60 p-4 shadow-glow sm:p-5">
+        <p className="text-xs uppercase tracking-[0.2em] text-calm-muted">Brainpod workspace</p>
+        <h1 className="text-2xl font-medium leading-snug text-calm-text">Your Mini-Pods</h1>
         <p className="max-w-xl text-sm leading-relaxed text-calm-muted">
           Private rooms for questions, experiments, and evolving work. Set your Director display
           name below so shared pods show who directed each question. Inviting someone shares the
@@ -149,8 +149,8 @@ export default async function WorkspacePage() {
         collaborators={collaborators}
       />
 
-      <section className="space-y-3 border-t border-calm-border pt-8">
-        <h2 className="text-lg font-medium text-calm-text">Workspace growth</h2>
+      <section className="panel space-y-2 p-4 sm:p-5">
+        <h2 className="text-sm font-medium text-calm-text">Workspace growth</h2>
         <p className="max-w-2xl text-sm leading-relaxed text-calm-muted">
           Email invitations are limited to 5 per day per Director. Removing access does not erase
           directed questions or swarm work already recorded in the pod.
