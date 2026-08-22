@@ -27,7 +27,10 @@ export async function POST() {
     );
   }
 
-  const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL ?? 'https://www.brainpod.org').replace(/\/$/, '');
+  const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL ?? 'https://www.brainpod.org').replace(
+    /\/$/,
+    ''
+  );
 
   const body = new URLSearchParams();
   body.set('mode', 'subscription');
@@ -42,6 +45,8 @@ export async function POST() {
   body.set('subscription_data[metadata][profile_id]', user.id);
   body.set('subscription_data[metadata][brainpod_tier]', 'sustaining_member');
   body.set('allow_promotion_codes', 'true');
+  // Account has Managed Payments enabled by default; membership checkout does not need it.
+  body.set('managed_payments[enabled]', 'false');
 
   const response = await fetch('https://api.stripe.com/v1/checkout/sessions', {
     method: 'POST',
