@@ -12,15 +12,18 @@ const AGENT_ID_SET: Set<string> = new Set(Object.values(AGENT_PROFILE_IDS));
 function parseDirectorMeta(raw: string | null | undefined): {
   directorNote: string | null;
   referenceUrl: string | null;
+  attachmentName: string | null;
 } {
-  if (!raw?.trim()) return { directorNote: null, referenceUrl: null };
+  if (!raw?.trim()) return { directorNote: null, referenceUrl: null, attachmentName: null };
   let directorNote: string | null = null;
   let referenceUrl: string | null = null;
+  let attachmentName: string | null = null;
   for (const line of raw.split('\n')) {
     if (line.startsWith('NOTE:')) directorNote = line.slice(5).trim() || null;
     if (line.startsWith('REF:')) referenceUrl = line.slice(4).trim() || null;
+    if (line.startsWith('ATTACHMENT:')) attachmentName = line.slice(11).trim() || null;
   }
-  return { directorNote, referenceUrl };
+  return { directorNote, referenceUrl, attachmentName };
 }
 
 async function importLegacyTurns(admin: ReturnType<typeof createAdminClient>, userId: string, podId: string) {
@@ -247,6 +250,7 @@ export default async function Home({ searchParams }: { searchParams: { pod?: str
     turns: SwarmTurn[];
     directorNote: string | null;
     referenceUrl: string | null;
+    attachmentName: string | null;
   }[] = [];
 
   for (let i = 0; i < rows.length; i += TURNS_PER_CYCLE) {
@@ -268,6 +272,7 @@ export default async function Home({ searchParams }: { searchParams: { pod?: str
       turns: agentTurns,
       directorNote: meta.directorNote,
       referenceUrl: meta.referenceUrl,
+      attachmentName: meta.attachmentName,
     });
   }
   initialCycles.reverse();
