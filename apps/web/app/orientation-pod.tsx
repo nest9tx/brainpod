@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import SiteNav from '@/components/site-nav';
 import SiteFooter from '@/components/site-footer';
+import { labelUntilUtcReset } from '@/lib/utc-reset';
 
 const SUGGESTED_PROMPT =
   'Help me understand how a Ground → Pressure-test → Construct → Verify cycle would tackle a small, well-defined problem.';
@@ -41,6 +42,8 @@ type OrientationPodProps = {
   }[];
   userEmail: string;
   currentDirectorLabel?: string;
+  /** Used for limit messaging (upgrade CTA vs pure reset). */
+  memberRole?: string;
 };
 
 function parseVerdictFromVeritasText(text: string | undefined): Verdict | null {
@@ -207,6 +210,7 @@ function ContributionNote({ verdict }: { verdict: Verdict }) {
 
 export default function OrientationPod({
   podId, podName, podSummary, initialRemainingPrompts, initialCycles, userEmail, currentDirectorLabel = 'Director',
+  memberRole = 'free_public',
 }: OrientationPodProps) {
   const [directorPrompt, setDirectorPrompt] = useState('');
   const [directorNote, setDirectorNote] = useState('');
@@ -298,13 +302,30 @@ export default function OrientationPod({
   async function onAttachmentSelected(file: File | null) {
     setAttachmentError(''); setAttachmentName(''); setAttachmentText('');
     if (!file) return;
-    if (!/\.(txt|md|csv|json|text)$/i.test(file.name)) { setAttachmentError('Text files only for now (.txt, .md, .csv, .json).'); return; }
-    if (file.size > 40 * 1024) { setAttachmentError('Keep attachments under 40KB for this phase.'); return; }
+    const lower = file.name.toLowerCase();
+    const isPdf = lower.endsWith('.pdf');
+    const isText = /\.(txt|md|csv|json|text)$/i.test(file.name);
+    if (!isPdf && !isText) {
+      setAttachmentError('Supported: .pdf, .txt, .md, .csv, .json');
+      return;
+    }
     try {
-      const text = await file.text();
-      if (!text.trim()) { setAttachmentError('That file looks empty.'); return; }
-      setAttachmentName(file.name); setAttachmentText(text.slice(0, 12000));
-    } catch { setAttachmentError('Could not read that file.'); }
+      const form = new FormData();
+      form.append('file', file);
+      const res = await fetch('/api/attachments/parse', { method: 'POST', body: form });
+      const data = await res.json();
+      if (!res.ok) {
+        setAttachmentError(data.detail ?? data.error ?? 'Could not read that file.');
+        return;
+      }
+      setAttachmentName(data.name || file.name);
+      setAttachmentText(data.text || '');
+      if (data.truncated) {
+        setAttachmentError('Text was truncated to the first 12,000 characters for this phase.');
+      }
+    } catch {
+      setAttachmentError('Could not read that file.');
+    }
   }
 
   function continueFromCycle(index: number) {
@@ -412,14 +433,14 @@ export default function OrientationPod({
           </div>
         </div>
         <div className="space-y-1">
-          <label htmlFor="director-attachment" className="text-xs text-calm-muted">Optional text attachment</label>
+          <label htmlFor="director-attachment" className="text-xs text-calm-muted">Optional attachment</label>
           <input key={attachmentInputKey} id="director-attachment" type="file"
-            accept=".txt,.md,.csv,.json,.text,text/plain,text/markdown,text/csv,application/json"
+            accept=".pdf,.txt,.md,.csv,.json,.text,application/pdf,text/plain,text/markdown,text/csv,application/json"
             className="block w-full text-xs text-calm-muted file:mr-3 file:rounded file:border-0 file:bg-calm-surface file:px-3 file:py-2 file:text-xs file:text-calm-text"
             onChange={(e) => onAttachmentSelected(e.target.files?.[0] ?? null)} />
           {attachmentName && <p className="text-[11px] text-calm-accent">Attached: {attachmentName}</p>}
           {attachmentError && <p className="text-[11px] text-red-400">{attachmentError}</p>}
-          <p className="text-[11px] text-calm-muted">.txt / .md / .csv / .json · under 40KB. PDF and images come later.</p>
+          <p className="text-[11px] text-calm-muted">.pdf (text-based, under 2MB) · .txt / .md / .csv / .json (under 80KB). Extracted text capped at 12k characters. Scanned image-only PDFs are not supported yet.</p>
         </div>
         <p className="text-xs text-calm-muted">
           {isFollowUp ? `Continuing in ${activeModeLabel} mode. Change the mode above if you want a different kind of response.` : mode === 'brainstorm' ? 'Brainstorm mode prioritizes open perspectives over scoring.' : mode === 'assist' ? 'Assist mode focuses on clarifying and strengthening your thinking.' : 'Construct mode aims for a structured artifact that can be verified.'}
@@ -429,7 +450,28 @@ export default function OrientationPod({
           {status === 'thinking' ? 'Swarm is working…' : isFollowUp ? 'Continue with swarm' : 'Send to swarm'}
         </button>
         {status === 'error' && <p className="text-sm text-red-400">The orchestra service isn’t reachable yet — this is expected until apps/orchestra is running and its API keys are configured.</p>}
-        {status === 'limit_reached' && <p className="text-sm text-calm-muted">You've used today's Director prompts for your membership tier. They reset at 00:00 UTC.</p>}
+        {status === 'limit_reached' && (
+          <div className="space-y-2 rounded-lg border border-calm-border bg-calm-bg/50 p-3 text-sm text-calm-muted">
+            <p className="text-calm-text">
+              {memberRole === 'sustaining_member' || memberRole === 'institutional_partner'
+                ? "You've used all of today's Director prompts for your membership tier."
+                : "You've used all of today's free Director prompts."}
+            </p>
+            <p>
+              Prompts reset in about{' '}
+              <span className="text-calm-text">{labelUntilUtcReset()}</span> (00:00 UTC).
+            </p>
+            {memberRole !== 'sustaining_member' && memberRole !== 'institutional_partner' && (
+              <p>
+                If you prefer not to wait, or want a higher daily limit,{' '}
+                <a href="/workspace" className="text-calm-accent underline hover:text-calm-text">
+                  consider becoming a Sustaining Member
+                </a>
+                . Membership helps fund the public-benefit free tier for others.
+              </p>
+            )}
+          </div>
+        )}
         {status === 'duplicate' && <p className="text-sm text-calm-muted">This exact question already has a verified result — try a new angle or a different question to earn Proof-of-Value.</p>}
       </section>
 
