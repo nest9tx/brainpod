@@ -4,7 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { AGENT_PROFILE_ID_BY_NAME, AGENT_PROFILE_IDS } from '@/lib/constants';
 
 type SwarmTurn = { agent: string; summary_conclusion: string };
-type Verdict = {
+ptype Verdict = {
   verdict: string;
   score: number | null;
   failure_modes: string[];
@@ -61,10 +61,6 @@ function sanitizeAttachment(
   const name = nameRaw.trim().slice(0, 120);
   const text = textRaw.trim();
   if (!name || !text) return null;
-  // Allow common text types only (content already client-filtered)
-  if (!/\.(txt|md|csv|json|text)$/i.test(name) && !name.includes('.')) {
-    // still allow extensionless text notes with a safe display name
-  }
   return {
     name: name.replace(/[^\w.\- ()\[\]]+/g, '_').slice(0, 120),
     text: text.slice(0, MAX_ATTACHMENT_CHARS),
@@ -85,6 +81,10 @@ function buildDirectorMeta(
     parts.push(attachment.text);
   }
   return parts.length ? parts.join('\n') : null;
+}
+
+function normalizeQuestion(q: string): string {
+  return q.trim().toLowerCase().replace(/\s+/g, ' ');
 }
 
 export async function POST(request: NextRequest) {
@@ -120,22 +120,48 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'pod_access_denied' }, { status: 403 });
   }
 
-  const normalizedPrompt = directorPrompt.trim().toLowerCase();
-  const { data: priorVerifiedArtifacts } = await supabase
-    .from('artifacts')
-    .select('question')
-    .eq('pod_id', podId)
-    .eq('is_verified', true);
+  const normalizedPrompt = normalizeQuestion(directorPrompt);
+  if (!normalizedPrompt) {
+    return NextResponse.json({ error: 'empty_prompt' }, { status: 400 });
+  }
 
-  const alreadyVerified = priorVerifiedArtifacts?.some(
-    (a) => a.question?.trim().toLowerCase() === normalizedPrompt
+  // Integrity: once a question is verified, exact re-runs do not earn more PoV.
+  // In-pod check (user-scoped) + ecosystem-wide check (admin) against verified artifacts.
+  const { data: priorInPod } = await supabase
+    .from('artifacts')
+    .select('question, is_verified')
+    .eq('pod_id', podId);
+
+  const inPodVerified = priorInPod?.some(
+    (a) => a.is_verified && normalizeQuestion(a.question ?? '') === normalizedPrompt
   );
-  if (alreadyVerified) {
+  if (inPodVerified) {
     return NextResponse.json(
       {
         error: 'duplicate_question',
         detail:
-          'This exact question already has a verified artifact in this pod. Ask something new to contribute — re-running a won question earns no additional Proof-of-Value.',
+          'This exact question already has a verified artifact in this pod. Continue the thread with a new angle, or start a clearly different question — re-running a won prompt earns no additional Proof-of-Value.',
+      },
+      { status: 409 }
+    );
+  }
+
+  const admin = createAdminClient();
+  const { data: globalVerified } = await admin
+    .from('artifacts')
+    .select('id, pod_id, question')
+    .eq('is_verified', true)
+    .limit(500);
+
+  const ecosystemHit = globalVerified?.find(
+    (a) => normalizeQuestion(a.question ?? '') === normalizedPrompt
+  );
+  if (ecosystemHit && ecosystemHit.pod_id !== podId) {
+    return NextResponse.json(
+      {
+        error: 'duplicate_question',
+        detail:
+          'This exact question already has a verified result elsewhere in Brainpod. Copying a released prompt as-is does not advance the ledger. Refine it, attach new materials, or continue from your own thread.',
       },
       { status: 409 }
     );
@@ -146,7 +172,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'daily_prompt_limit_exceeded' }, { status: 429 });
   }
 
-  const admin = createAdminClient();
   const { data: profile } = await admin
     .from('profiles')
     .select('display_name')
