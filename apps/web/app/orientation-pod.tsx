@@ -184,7 +184,7 @@ function ContributionNote({ verdict }: { verdict: Verdict }) {
       <div className="rounded-md border border-calm-accent/40 bg-calm-accent/10 px-3 py-2.5 text-xs text-calm-text">
         <p className="font-medium text-calm-accent">Collaborative contribution advanced</p>
         <p className="mt-1 text-calm-muted">
-          This cycle was verified. Proof-of-Value was recorded for the work produced under human direction with the swarm. Score {verdict.score}/100.
+          This cycle was verified. Proof-of-Value was recorded for the collaborative artifact under human direction — not a ranking of agents or Directors. Score {verdict.score}/100.
         </p>
       </div>
     );
@@ -344,7 +344,7 @@ export default function OrientationPod({
       </header>
 
       <div className="panel p-4 text-sm text-calm-muted">
-        {remainingPrompts} free Director prompt{remainingPrompts === 1 ? '' : 's'} remaining today · resets 00:00 UTC
+        {remainingPrompts} Director prompt{remainingPrompts === 1 ? '' : 's'} remaining today · resets 00:00 UTC
       </div>
 
       {isFirstExperience && (
@@ -429,7 +429,7 @@ export default function OrientationPod({
           {status === 'thinking' ? 'Swarm is working…' : isFollowUp ? 'Continue with swarm' : 'Send to swarm'}
         </button>
         {status === 'error' && <p className="text-sm text-red-400">The orchestra service isn’t reachable yet — this is expected until apps/orchestra is running and its API keys are configured.</p>}
-        {status === 'limit_reached' && <p className="text-sm text-calm-muted">You’ve used today’s free Director prompts. They reset at 00:00 UTC.</p>}
+        {status === 'limit_reached' && <p className="text-sm text-calm-muted">You've used today's Director prompts for your membership tier. They reset at 00:00 UTC.</p>}
         {status === 'duplicate' && <p className="text-sm text-calm-muted">This exact question already has a verified result — try a new angle or a different question to earn Proof-of-Value.</p>}
       </section>
 
