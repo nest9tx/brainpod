@@ -3,8 +3,8 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { AGENT_PROFILE_IDS, ORIENTATION_POD_ID } from '@/lib/constants';
 import OrientationPod, { type SwarmTurn } from './orientation-pod';
 import PublicHome from './public-home';
+import { dailyLimitForRole } from '@/lib/tiers';
 
-const FREE_TIER_DAILY_LIMIT = 5;
 const TURNS_PER_CYCLE = 5;
 
 const AGENT_ID_SET: Set<string> = new Set(Object.values(AGENT_PROFILE_IDS));
@@ -73,7 +73,7 @@ async function importLegacyTurns(admin: ReturnType<typeof createAdminClient>, us
                 .map((artifact) => ({
                   ...artifact,
                   pod_id: podId,
-                  turn_id: copiedIdBySequence.get(sequenceByLegacyId.get(artifact.turn_id) ?? -1),
+                  turn_id: copiedIdBySequence.get(sequenceByLegacyId.get(artifact.turn_id!) ?? -1),
                 }))
                 .filter((artifact) => artifact.turn_id)
             );
@@ -82,41 +82,13 @@ async function importLegacyTurns(admin: ReturnType<typeof createAdminClient>, us
       }
     }
   }
-
-  await backfillStudyArtifacts(admin, podId);
 }
 
-async function backfillStudyArtifacts(admin: ReturnType<typeof createAdminClient>, podId: string) {
-  const { data: turns } = await admin
-    .from('pod_turns')
-    .select('id, sender_id, summary_conclusion, turn_sequence')
-    .eq('pod_id', podId)
-    .order('turn_sequence', { ascending: true });
-  if (!turns?.length) return;
-  const { data: existing } = await admin.from('artifacts').select('turn_id').eq('pod_id', podId);
-  const existingTurnIds = new Set(existing?.map((artifact) => artifact.turn_id) ?? []);
-  const missing = [];
-  for (let index = 0; index + 4 < turns.length; index += 5) {
-    const cycle = turns.slice(index, index + 5);
-    const director = cycle[0];
-    const construct = cycle.find((turn) => turn.sender_id === AGENT_PROFILE_IDS.synthetix);
-    if (director.sender_id === AGENT_PROFILE_IDS.synthetix || !construct || existingTurnIds.has(construct.id))
-      continue;
-    missing.push({
-      pod_id: podId,
-      turn_id: construct.id,
-      creator_id: AGENT_PROFILE_IDS.synthetix,
-      type: 'structured_analysis',
-      content: construct.summary_conclusion,
-      question: director.summary_conclusion,
-      veritas_score: null,
-      is_verified: false,
-    });
-  }
-  if (missing.length) await admin.from('artifacts').insert(missing);
-}
-
-export default async function Home({ searchParams }: { searchParams: { pod?: string } }) {
+export default async function HomePage({
+  searchParams,
+}: {
+  searchParams?: { pod?: string };
+}) {
   const supabase = createClient();
   const {
     data: { user },
@@ -126,81 +98,74 @@ export default async function Home({ searchParams }: { searchParams: { pod?: str
     return <PublicHome />;
   }
 
-  const today = new Date().toISOString().slice(0, 10);
   const admin = createAdminClient();
+  const today = new Date().toISOString().slice(0, 10);
+  const requestedPodId = searchParams?.pod;
 
-  let pod: { id: string; name: string; rolling_summary: string } | null = null;
+  let pod: {
+    id: string;
+    name: string;
+    rolling_summary: string;
+  } | null = null;
 
-  if (searchParams.pod) {
-    const { data: owned } = await supabase
-      .from('mini_pods')
-      .select('id, name, rolling_summary')
-      .eq('id', searchParams.pod)
-      .eq('created_by', user.id)
+  if (requestedPodId) {
+    const { data: access } = await supabase
+      .from('private_pod_permissions')
+      .select('can_direct')
+      .eq('pod_id', requestedPodId)
+      .eq('profile_id', user.id)
       .maybeSingle();
-    if (owned) {
-      pod = owned;
-    } else {
-      const { data: access } = await admin
-        .from('private_pod_permissions')
-        .select('pod_id')
-        .eq('pod_id', searchParams.pod)
-        .eq('profile_id', user.id)
+    if (access) {
+      const { data: requested } = await admin
+        .from('mini_pods')
+        .select('id, name, rolling_summary')
+        .eq('id', requestedPodId)
         .maybeSingle();
-      if (access) {
-        const { data: shared } = await admin
-          .from('mini_pods')
-          .select('id, name, rolling_summary')
-          .eq('id', searchParams.pod)
-          .maybeSingle();
-        if (shared) pod = shared;
-      }
+      pod = requested;
     }
   }
 
   if (!pod) {
-    const { data: orientation } = await supabase
+    const { data: owned } = await admin
       .from('mini_pods')
       .select('id, name, rolling_summary')
       .eq('created_by', user.id)
-      .eq('category_slug', 'orientation')
-      .eq('status', 'private_isolated')
       .order('created_at', { ascending: true })
       .limit(1)
       .maybeSingle();
-    pod = orientation;
+    pod = owned;
   }
 
   if (!pod) {
-    const { data: newPod, error: podError } = await admin
+    const { data: created } = await admin
       .from('mini_pods')
       .insert({
-        name: 'My Orientation Pod',
-        category_slug: 'orientation',
-        status: 'private_isolated',
+        name: 'Orientation',
+        category_slug: 'science',
         created_by: user.id,
+        rolling_summary: 'Initial context baseline setting up…',
+        status: 'active',
       })
       .select('id, name, rolling_summary')
       .single();
-
-    if (podError || !newPod) {
-      throw new Error(`Could not create your private Orientation Pod: ${podError?.message ?? 'unknown error'}`);
+    pod = created;
+    if (pod) {
+      await admin.from('private_pod_permissions').insert({
+        pod_id: pod.id,
+        profile_id: user.id,
+        can_direct: true,
+      });
+      await importLegacyTurns(admin, user.id, pod.id);
     }
-
-    const { error: permissionError } = await admin.from('private_pod_permissions').insert({
-      pod_id: newPod.id,
-      profile_id: user.id,
-      can_direct: true,
-    });
-    if (permissionError) throw new Error(`Could not grant pod access: ${permissionError.message}`);
-    pod = newPod;
   }
 
-  await importLegacyTurns(admin, user.id, pod.id);
+  if (!pod) {
+    return <PublicHome />;
+  }
 
   const { data: existingProfile } = await admin
     .from('profiles')
-    .select('id, display_name')
+    .select('id, display_name, role')
     .eq('id', user.id)
     .maybeSingle();
 
@@ -208,11 +173,14 @@ export default async function Home({ searchParams }: { searchParams: { pod?: str
     await admin.from('profiles').insert({
       id: user.id,
       display_name: user.email?.split('@')[0] ?? 'Director',
+      role: 'free_public',
     });
   }
 
   const directorLabel =
     existingProfile?.display_name || user.email?.split('@')[0] || 'Director';
+  const memberRole = existingProfile?.role ?? 'free_public';
+  const dailyLimit = dailyLimitForRole(memberRole);
 
   const [{ data: usage }, { data: history }] = await Promise.all([
     supabase
@@ -231,7 +199,7 @@ export default async function Home({ searchParams }: { searchParams: { pod?: str
       .limit(200),
   ]);
 
-  const remainingPrompts = Math.max(FREE_TIER_DAILY_LIMIT - (usage?.prompt_count ?? 0), 0);
+  const remainingPrompts = Math.max(dailyLimit - (usage?.prompt_count ?? 0), 0);
 
   type HistoryRow = {
     summary_conclusion: string;
