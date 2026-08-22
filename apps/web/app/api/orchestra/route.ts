@@ -18,6 +18,7 @@ type OrchestraResponse = {
 };
 
 const ARTIFACT_VERIFIED_POV_DELTA = 10;
+const MAX_ATTACHMENT_CHARS = 12000;
 
 function buildRollingSummary(
   directorPrompt: string,
@@ -52,10 +53,37 @@ function sanitizeReferenceUrl(raw: unknown): string | null {
   }
 }
 
-function buildDirectorMeta(note: string, referenceUrl: string | null): string | null {
+function sanitizeAttachment(
+  nameRaw: unknown,
+  textRaw: unknown
+): { name: string; text: string } | null {
+  if (typeof nameRaw !== 'string' || typeof textRaw !== 'string') return null;
+  const name = nameRaw.trim().slice(0, 120);
+  const text = textRaw.trim();
+  if (!name || !text) return null;
+  // Allow common text types only (content already client-filtered)
+  if (!/\.(txt|md|csv|json|text)$/i.test(name) && !name.includes('.')) {
+    // still allow extensionless text notes with a safe display name
+  }
+  return {
+    name: name.replace(/[^\w.\- ()\[\]]+/g, '_').slice(0, 120),
+    text: text.slice(0, MAX_ATTACHMENT_CHARS),
+  };
+}
+
+function buildDirectorMeta(
+  note: string,
+  referenceUrl: string | null,
+  attachment: { name: string; text: string } | null
+): string | null {
   const parts: string[] = [];
   if (note.trim()) parts.push(`NOTE: ${note.trim().slice(0, 800)}`);
   if (referenceUrl) parts.push(`REF: ${referenceUrl}`);
+  if (attachment) {
+    parts.push(`ATTACHMENT: ${attachment.name}`);
+    parts.push('---attachment---');
+    parts.push(attachment.text);
+  }
   return parts.length ? parts.join('\n') : null;
 }
 
@@ -67,6 +95,7 @@ export async function POST(request: NextRequest) {
   const mode: string = body.mode ?? 'construct';
   const directorNote: string = typeof body.director_note === 'string' ? body.director_note : '';
   const referenceUrl = sanitizeReferenceUrl(body.reference_url);
+  const attachment = sanitizeAttachment(body.attachment_name, body.attachment_text);
 
   const supabase = createClient();
 
@@ -126,9 +155,8 @@ export async function POST(request: NextRequest) {
   const senderLabel =
     profile?.display_name?.trim() || user.email?.split('@')[0] || 'Director';
 
-  const directorMeta = buildDirectorMeta(directorNote, referenceUrl);
+  const directorMeta = buildDirectorMeta(directorNote, referenceUrl, attachment);
 
-  // Fold note/reference into prior_context so the orchestra can use them
   let enrichedContext = priorContext;
   if (directorMeta) {
     enrichedContext = enrichedContext
@@ -246,5 +274,6 @@ export async function POST(request: NextRequest) {
     director_label: senderLabel,
     director_note: directorNote.trim().slice(0, 800) || null,
     reference_url: referenceUrl,
+    attachment_name: attachment?.name ?? null,
   });
 }
