@@ -41,13 +41,11 @@ export async function POST(request: NextRequest) {
           { status: 400 }
         );
       }
-      const buffer = Buffer.from(await file.arrayBuffer());
-      // pdf-parse is CommonJS; dynamic import keeps the route edge-safe for bundling.
-      const pdfParse = (await import('pdf-parse')).default as (
-        data: Buffer
-      ) => Promise<{ text: string; numpages?: number }>;
-      const parsed = await pdfParse(buffer);
-      const text = (parsed.text ?? '').replace(/\u0000/g, '').trim();
+      const buffer = new Uint8Array(await file.arrayBuffer());
+      const { extractText } = await import('unpdf');
+      const result = await extractText(buffer, { mergePages: true });
+      const raw = Array.isArray(result.text) ? result.text.join('\n') : String(result.text ?? '');
+      const text = raw.replace(/\u0000/g, '').trim();
       if (!text) {
         return NextResponse.json(
           {
@@ -63,7 +61,7 @@ export async function POST(request: NextRequest) {
         text: text.slice(0, MAX_TEXT_CHARS),
         truncated: text.length > MAX_TEXT_CHARS,
         kind: 'pdf',
-        pages: parsed.numpages ?? null,
+        pages: result.totalPages ?? null,
       });
     }
 

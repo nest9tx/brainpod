@@ -273,6 +273,7 @@ export default async function Home({ searchParams }: { searchParams: { pod?: str
       initialCycles={initialCycles}
       userEmail={user.email ?? ''}
       currentDirectorLabel={directorLabel}
+      memberRole={memberRole}
     />
   );
 }
