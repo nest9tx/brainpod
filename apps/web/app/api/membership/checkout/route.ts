@@ -4,7 +4,8 @@ import { STRIPE_PRICE_SUSTAINING } from '@/lib/tiers';
 
 /**
  * Creates a Stripe Checkout Session for Sustaining Membership.
- * Requires STRIPE_SECRET_KEY in the environment (test key for sandbox).
+ * Production: STRIPE_SECRET_KEY must be the live secret (sk_live_…)
+ * and STRIPE_PRICE_SUSTAINING should match the live price if not using the default.
  */
 export async function POST() {
   const supabase = createClient();
@@ -21,7 +22,7 @@ export async function POST() {
       {
         error: 'stripe_not_configured',
         detail:
-          'STRIPE_SECRET_KEY is not set on the web service yet. Add the test secret from Stripe Dashboard → Developers → API keys, then redeploy.',
+          'STRIPE_SECRET_KEY is not set. Add the live secret from Stripe Dashboard → Developers → API keys, then redeploy.',
       },
       { status: 503 }
     );
@@ -45,7 +46,6 @@ export async function POST() {
   body.set('subscription_data[metadata][profile_id]', user.id);
   body.set('subscription_data[metadata][brainpod_tier]', 'sustaining_member');
   body.set('allow_promotion_codes', 'true');
-  // Account has Managed Payments enabled by default; membership checkout does not need it.
   body.set('managed_payments[enabled]', 'false');
 
   const response = await fetch('https://api.stripe.com/v1/checkout/sessions', {

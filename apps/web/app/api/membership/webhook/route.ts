@@ -1,14 +1,44 @@
+import { createHmac, timingSafeEqual } from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 
 /**
- * Stripe webhook: activate / deactivate Sustaining Membership on profiles.role.
- * Configure endpoint: https://www.brainpod.org/api/membership/webhook
- * Events: checkout.session.completed, customer.subscription.deleted, customer.subscription.updated
+ * Stripe webhook: activate / deactivate Sustaining Membership.
+ * Endpoint: https://www.brainpod.org/api/membership/webhook
+ * Events: checkout.session.completed, customer.subscription.updated, customer.subscription.deleted
  *
- * On activation, today's prompt_count is reset so free-tier usage earlier the same
- * day does not consume the Sustaining allotment.
+ * Live requires STRIPE_WEBHOOK_SECRET (whsec_…) from the Dashboard endpoint.
+ * On activation, today's prompt_count resets so free usage does not consume the paid allotment.
  */
+
+function verifyStripeSignature(
+  payload: string,
+  header: string,
+  secret: string
+): boolean {
+  const items = header.split(',').map((part) => part.trim());
+  const timestamp = items.find((p) => p.startsWith('t='))?.slice(2);
+  const signature = items.find((p) => p.startsWith('v1='))?.slice(3);
+  if (!timestamp || !signature) return false;
+
+  // Reject timestamps older than 5 minutes
+  const ts = Number(timestamp);
+  if (!Number.isFinite(ts) || Math.abs(Date.now() / 1000 - ts) > 300) return false;
+
+  const expected = createHmac('sha256', secret)
+    .update(`${timestamp}.${payload}`, 'utf8')
+    .digest('hex');
+
+  try {
+    const a = Buffer.from(expected, 'utf8');
+    const b = Buffer.from(signature, 'utf8');
+    if (a.length !== b.length) return false;
+    return timingSafeEqual(a, b);
+  } catch {
+    return false;
+  }
+}
+
 export async function POST(request: NextRequest) {
   const secret = process.env.STRIPE_SECRET_KEY;
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
@@ -20,8 +50,15 @@ export async function POST(request: NextRequest) {
   const payload = await request.text();
   const sig = request.headers.get('stripe-signature');
 
-  if (webhookSecret && !sig) {
-    return NextResponse.json({ error: 'missing_signature' }, { status: 400 });
+  // Live keys must always verify. Test keys may run without a secret only in early sandbox.
+  const isLiveKey = secret.startsWith('sk_live');
+  if (isLiveKey && !webhookSecret) {
+    return NextResponse.json({ error: 'webhook_secret_required_for_live' }, { status: 503 });
+  }
+  if (webhookSecret) {
+    if (!sig || !verifyStripeSignature(payload, sig, webhookSecret)) {
+      return NextResponse.json({ error: 'invalid_signature' }, { status: 400 });
+    }
   }
 
   let event: {
@@ -50,7 +87,6 @@ export async function POST(request: NextRequest) {
       })
       .eq('id', profileId);
 
-    // Fresh paid allotment for the rest of the UTC day.
     await admin.from('daily_usage_logs').upsert(
       {
         profile_id: profileId,

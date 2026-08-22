@@ -42,8 +42,12 @@ export function tierLabel(role: string | null | undefined): string {
   }
 }
 
-/** Stripe Price ID for Sustaining Membership (sandbox product). Override via env in production. */
+/**
+ * Live Sustaining Membership price (Brainpod / LuminaNova).
+ * Override with STRIPE_PRICE_SUSTAINING if you recreate the product.
+ * Sandbox was price_1U7GuH76q9ESIa7ubkJg1Awo — do not use in production.
+ */
 export const STRIPE_PRICE_SUSTAINING =
-  process.env.STRIPE_PRICE_SUSTAINING ?? 'price_1U7GuH76q9ESIa7ubkJg1Awo';
+  process.env.STRIPE_PRICE_SUSTAINING ?? 'price_1U7Ng65cgdJTbsqKV7YueutV';
 
 export const SUSTAINING_MONTHLY_DISPLAY = '$15 / month';
