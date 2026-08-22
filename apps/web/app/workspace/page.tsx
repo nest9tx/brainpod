@@ -6,9 +6,14 @@ import SiteFooter from '@/components/site-footer';
 import PodManager from './pod-manager';
 import DisplayNameEditor from './display-name';
 import MembershipPanel from './membership-panel';
+import MembershipFlash from './membership-flash';
 import { dailyLimitForRole } from '@/lib/tiers';
 
-export default async function WorkspacePage() {
+export default async function WorkspacePage({
+  searchParams,
+}: {
+  searchParams?: { membership?: string };
+}) {
   const supabase = createClient();
   const {
     data: { user },
@@ -136,6 +141,8 @@ export default async function WorkspacePage() {
           entire pod history; you can revoke or remove access later without erasing recorded work.
         </p>
       </header>
+
+      <MembershipFlash status={searchParams?.membership} />
 
       <DisplayNameEditor
         initialName={profile?.display_name ?? user.email?.split('@')[0] ?? 'Director'}
