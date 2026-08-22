@@ -26,7 +26,11 @@ function parseDirectorMeta(raw: string | null | undefined): {
   return { directorNote, referenceUrl, attachmentName };
 }
 
-async function importLegacyTurns(admin: ReturnType<typeof createAdminClient>, userId: string, podId: string) {
+async function importLegacyTurns(
+  admin: ReturnType<typeof createAdminClient>,
+  userId: string,
+  podId: string
+) {
   const { count: privateTurnCount } = await admin
     .from('pod_turns')
     .select('id', { count: 'exact', head: true })
@@ -34,7 +38,9 @@ async function importLegacyTurns(admin: ReturnType<typeof createAdminClient>, us
   if ((privateTurnCount ?? 0) === 0) {
     const { data: legacyTurns } = await admin
       .from('pod_turns')
-      .select('id, sender_id, summary_conclusion, collapsed_reasoning, turn_sequence, created_at, sender_label')
+      .select(
+        'id, sender_id, summary_conclusion, collapsed_reasoning, turn_sequence, created_at, sender_label'
+      )
       .eq('pod_id', ORIENTATION_POD_ID)
       .order('turn_sequence', { ascending: true });
     if (legacyTurns?.length) {
@@ -63,17 +69,25 @@ async function importLegacyTurns(admin: ReturnType<typeof createAdminClient>, us
           const legacyIds = selectedTurns.map((turn) => turn.id);
           const { data: legacyArtifacts } = await admin
             .from('artifacts')
-            .select('turn_id, creator_id, type, content, veritas_score, is_verified, question, created_at')
+            .select(
+              'turn_id, creator_id, type, content, veritas_score, is_verified, question, created_at'
+            )
             .in('turn_id', legacyIds);
-          const copiedIdBySequence = new Map(copiedTurns.map((turn) => [turn.turn_sequence, turn.id]));
-          const sequenceByLegacyId = new Map(selectedTurns.map((turn, index) => [turn.id, index + 1]));
+          const copiedIdBySequence = new Map(
+            copiedTurns.map((turn) => [turn.turn_sequence, turn.id])
+          );
+          const sequenceByLegacyId = new Map(
+            selectedTurns.map((turn, index) => [turn.id, index + 1])
+          );
           if (legacyArtifacts?.length) {
             await admin.from('artifacts').insert(
               legacyArtifacts
                 .map((artifact) => ({
                   ...artifact,
                   pod_id: podId,
-                  turn_id: copiedIdBySequence.get(sequenceByLegacyId.get(artifact.turn_id!) ?? -1),
+                  turn_id: copiedIdBySequence.get(
+                    sequenceByLegacyId.get(artifact.turn_id!) ?? -1
+                  ),
                 }))
                 .filter((artifact) => artifact.turn_id)
             );
@@ -84,11 +98,7 @@ async function importLegacyTurns(admin: ReturnType<typeof createAdminClient>, us
   }
 }
 
-export default async function HomePage({
-  searchParams,
-}: {
-  searchParams?: { pod?: string };
-}) {
+export default async function Home({ searchParams }: { searchParams: { pod?: string } }) {
   const supabase = createClient();
   const {
     data: { user },
@@ -98,70 +108,79 @@ export default async function HomePage({
     return <PublicHome />;
   }
 
-  const admin = createAdminClient();
   const today = new Date().toISOString().slice(0, 10);
-  const requestedPodId = searchParams?.pod;
+  const admin = createAdminClient();
 
-  let pod: {
-    id: string;
-    name: string;
-    rolling_summary: string;
-  } | null = null;
+  let pod: { id: string; name: string; rolling_summary: string } | null = null;
 
-  if (requestedPodId) {
-    const { data: access } = await supabase
-      .from('private_pod_permissions')
-      .select('can_direct')
-      .eq('pod_id', requestedPodId)
-      .eq('profile_id', user.id)
+  if (searchParams.pod) {
+    const { data: owned } = await supabase
+      .from('mini_pods')
+      .select('id, name, rolling_summary')
+      .eq('id', searchParams.pod)
+      .eq('created_by', user.id)
       .maybeSingle();
-    if (access) {
-      const { data: requested } = await admin
-        .from('mini_pods')
-        .select('id, name, rolling_summary')
-        .eq('id', requestedPodId)
+    if (owned) {
+      pod = owned;
+    } else {
+      const { data: access } = await admin
+        .from('private_pod_permissions')
+        .select('pod_id')
+        .eq('pod_id', searchParams.pod)
+        .eq('profile_id', user.id)
         .maybeSingle();
-      pod = requested;
+      if (access) {
+        const { data: shared } = await admin
+          .from('mini_pods')
+          .select('id, name, rolling_summary')
+          .eq('id', searchParams.pod)
+          .maybeSingle();
+        if (shared) pod = shared;
+      }
     }
   }
 
   if (!pod) {
-    const { data: owned } = await admin
+    const { data: orientation } = await supabase
       .from('mini_pods')
       .select('id, name, rolling_summary')
       .eq('created_by', user.id)
+      .eq('category_slug', 'orientation')
+      .eq('status', 'private_isolated')
       .order('created_at', { ascending: true })
       .limit(1)
       .maybeSingle();
-    pod = owned;
+    pod = orientation;
   }
 
   if (!pod) {
-    const { data: created } = await admin
+    const { data: newPod, error: podError } = await admin
       .from('mini_pods')
       .insert({
-        name: 'Orientation',
-        category_slug: 'science',
+        name: 'My Orientation Pod',
+        category_slug: 'orientation',
+        status: 'private_isolated',
         created_by: user.id,
-        rolling_summary: 'Initial context baseline setting up…',
-        status: 'active',
       })
       .select('id, name, rolling_summary')
       .single();
-    pod = created;
-    if (pod) {
-      await admin.from('private_pod_permissions').insert({
-        pod_id: pod.id,
-        profile_id: user.id,
-        can_direct: true,
-      });
-      await importLegacyTurns(admin, user.id, pod.id);
+
+    if (podError || !newPod) {
+      throw new Error(
+        `Could not create your private Orientation Pod: ${podError?.message ?? 'unknown error'}`
+      );
     }
+
+    const { error: permissionError } = await admin.from('private_pod_permissions').insert({
+      pod_id: newPod.id,
+      profile_id: user.id,
+      can_direct: true,
+    });
+    if (permissionError) throw new Error(`Could not grant pod access: ${permissionError.message}`);
+    pod = newPod;
   }
 
-  if (!pod) {
-    return <PublicHome />;
-  }
+  await importLegacyTurns(admin, user.id, pod.id);
 
   const { data: existingProfile } = await admin
     .from('profiles')

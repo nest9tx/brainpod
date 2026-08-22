@@ -5,6 +5,8 @@ import SiteNav from '@/components/site-nav';
 import SiteFooter from '@/components/site-footer';
 import PodManager from './pod-manager';
 import DisplayNameEditor from './display-name';
+import MembershipPanel from './membership-panel';
+import { dailyLimitForRole } from '@/lib/tiers';
 
 export default async function WorkspacePage() {
   const supabase = createClient();
@@ -70,9 +72,20 @@ export default async function WorkspacePage() {
 
   const { data: profile } = await admin
     .from('profiles')
-    .select('display_name')
+    .select('display_name, role')
     .eq('id', user.id)
     .maybeSingle();
+
+  const memberRole = profile?.role ?? 'free_public';
+  const dailyLimit = dailyLimitForRole(memberRole);
+  const today = new Date().toISOString().slice(0, 10);
+  const { data: usage } = await admin
+    .from('daily_usage_logs')
+    .select('prompt_count')
+    .eq('profile_id', user.id)
+    .eq('usage_date', today)
+    .maybeSingle();
+  const usedToday = usage?.prompt_count ?? 0;
 
   const { data: pendingReceived } = user.email
     ? await admin
@@ -128,6 +141,8 @@ export default async function WorkspacePage() {
         initialName={profile?.display_name ?? user.email?.split('@')[0] ?? 'Director'}
         email={user.email ?? ''}
       />
+
+      <MembershipPanel role={memberRole} dailyLimit={dailyLimit} usedToday={usedToday} />
 
       <PodManager
         initialPods={pods}
