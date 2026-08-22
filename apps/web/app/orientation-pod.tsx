@@ -260,6 +260,7 @@ export default function OrientationPod({
   const [attachmentName, setAttachmentName] = useState('');
   const [attachmentText, setAttachmentText] = useState('');
   const [attachmentError, setAttachmentError] = useState('');
+  const [attachmentInputKey, setAttachmentInputKey] = useState(0);
   const [mode, setMode] = useState<WorkMode>('construct');
   const [liveSummary, setLiveSummary] = useState(podSummary);
   const [cycles, setCycles] = useState<Cycle[]>(
@@ -365,6 +366,7 @@ export default function OrientationPod({
       setAttachmentName('');
       setAttachmentText('');
       setAttachmentError('');
+      setAttachmentInputKey((k) => k + 1);
       setIsFollowUp(true);
       setRemainingPrompts((n) => Math.max(n - 1, 0));
       setStatus('idle');
@@ -383,6 +385,7 @@ export default function OrientationPod({
     setAttachmentName('');
     setAttachmentText('');
     setAttachmentError('');
+    setAttachmentInputKey((k) => k + 1);
   }
 
   async function onAttachmentSelected(file: File | null) {
@@ -422,6 +425,7 @@ export default function OrientationPod({
     setAttachmentName('');
     setAttachmentText('');
     setAttachmentError('');
+    setAttachmentInputKey((k) => k + 1);
     if (typeof window !== 'undefined') {
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
@@ -583,6 +587,7 @@ export default function OrientationPod({
             Optional text attachment
           </label>
           <input
+            key={attachmentInputKey}
             id="director-attachment"
             type="file"
             accept=".txt,.md,.csv,.json,.text,text/plain,text/markdown,text/csv,application/json"
