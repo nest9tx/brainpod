@@ -2,7 +2,53 @@
 @tailwind components;
 @tailwind utilities;
 
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
 body {
   background-color: theme('colors.calm.bg');
   color: theme('colors.calm.text');
+  overflow-x: hidden;
+}
+
+/* Prefer system text rendering on iOS Safari */
+body,
+button,
+input,
+textarea {
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Avoid iOS zoom-on-focus for form fields under 16px */
+@media (max-width: 640px) {
+  input,
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+
+  /* Comfortable tap targets without a full redesign */
+  button,
+  a {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  a.text-xs,
+  button.text-xs {
+    display: inline-flex;
+    align-items: center;
+    padding-top: 0.35rem;
+    padding-bottom: 0.35rem;
+  }
+}
+
+/* Safe areas for notched iPhones */
+@supports (padding: max(0px)) {
+  body {
+    padding-left: max(0px, env(safe-area-inset-left));
+    padding-right: max(0px, env(safe-area-inset-right));
+  }
 }
