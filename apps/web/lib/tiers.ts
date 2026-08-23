@@ -3,7 +3,8 @@ export type UserRole =
   | 'sustaining_member'
   | 'institutional_partner'
   | 'native_agent'
-  | 'byoa_agent';
+  | 'byoa_agent'
+  | 'steward';
 
 export const TIER_DAILY_LIMITS: Record<string, number> = {
   free_public: 5,
@@ -11,6 +12,7 @@ export const TIER_DAILY_LIMITS: Record<string, number> = {
   institutional_partner: 100,
   native_agent: 5,
   byoa_agent: 5,
+  steward: 100,
 };
 
 export function dailyLimitForRole(role: string | null | undefined): number {
@@ -37,6 +39,8 @@ export function tierLabel(role: string | null | undefined): string {
       return 'Sustaining Member';
     case 'institutional_partner':
       return 'Institutional Partner';
+    case 'steward':
+      return 'Steward';
     default:
       return 'Public Benefit (Free)';
   }
@@ -49,5 +53,3 @@ export function tierLabel(role: string | null | undefined): string {
  */
 export const STRIPE_PRICE_SUSTAINING =
   process.env.STRIPE_PRICE_SUSTAINING ?? 'price_1U7Ng65cgdJTbsqKV7YueutV';
-
-export const SUSTAINING_MONTHLY_DISPLAY = '$15 / month';
