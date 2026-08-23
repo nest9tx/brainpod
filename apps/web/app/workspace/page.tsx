@@ -78,7 +78,7 @@ export default async function WorkspacePage({
 
   const { data: profile } = await admin
     .from('profiles')
-    .select('display_name, role')
+    .select('display_name, role, is_steward')
     .eq('id', user.id)
     .maybeSingle();
 
@@ -180,7 +180,7 @@ export default async function WorkspacePage({
         </p>
       </section>
 
-      {isSteward(memberRole, user.id) && (
+      {isSteward(profile?.is_steward, user.id) && (
         <section className="panel space-y-2 p-4 sm:p-5">
           <h2 className="text-sm font-medium text-calm-text">Steward</h2>
           <p className="text-sm text-calm-muted">
