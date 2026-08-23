@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation';
+import Link from 'next/link';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import SiteNav from '@/components/site-nav';
@@ -8,6 +9,7 @@ import DisplayNameEditor from './display-name';
 import MembershipPanel from './membership-panel';
 import MembershipFlash from './membership-flash';
 import { dailyLimitForRole } from '@/lib/tiers';
+import { isSteward } from '@/lib/steward';
 
 export default async function WorkspacePage({
   searchParams,
@@ -71,7 +73,6 @@ export default async function WorkspacePage({
           'id, pod_id, question, public_release, public_summary, public_summary_source, veritas_score, is_verified, created_at'
         )
         .in('pod_id', podIds)
-        .not('question', 'is', null)
         .order('created_at', { ascending: false })
     : { data: [] };
 
@@ -92,35 +93,35 @@ export default async function WorkspacePage({
     .maybeSingle();
   const usedToday = usage?.prompt_count ?? 0;
 
-  const { data: pendingReceived } = user.email
-    ? await admin
-        .from('pod_invites')
-        .select('id, token, invited_email, status, expires_at, mini_pods(name)')
-        .eq('status', 'pending')
-        .ilike('invited_email', user.email)
-        .order('created_at', { ascending: false })
-        .limit(10)
-    : { data: [] };
+  const { data: pendingReceived } = await admin
+    .from('pod_invites')
+    .select('id, token, expires_at, mini_pods(name)')
+    .eq('invited_email', (user.email ?? '').toLowerCase())
+    .is('accepted_at', null)
+    .gt('expires_at', new Date().toISOString())
+    .order('created_at', { ascending: false });
 
-  const [{ data: pendingSent }, { data: memberRows }] =
+  const { data: pendingSent } =
     ownedIds.length > 0
-      ? await Promise.all([
-          admin
-            .from('pod_invites')
-            .select('id, pod_id, invited_email, status, created_at, expires_at')
-            .in('pod_id', ownedIds)
-            .eq('status', 'pending')
-            .order('created_at', { ascending: false }),
-          admin
-            .from('private_pod_permissions')
-            .select('id, pod_id, profile_id, can_direct, granted_at, profiles(display_name)')
-            .in('pod_id', ownedIds)
-            .neq('profile_id', user.id),
-        ])
-      : [{ data: [] }, { data: [] }];
+      ? await admin
+          .from('pod_invites')
+          .select('id, pod_id, invited_email, expires_at')
+          .in('pod_id', ownedIds)
+          .is('accepted_at', null)
+          .gt('expires_at', new Date().toISOString())
+          .order('created_at', { ascending: false })
+      : { data: [] };
 
-  const collaborators = (memberRows ?? []).map((row) => ({
-    permission_id: row.id,
+  const { data: collabRows } =
+    ownedIds.length > 0
+      ? await admin
+          .from('private_pod_permissions')
+          .select('pod_id, profile_id, can_direct, profiles(display_name)')
+          .in('pod_id', ownedIds)
+          .neq('profile_id', user.id)
+      : { data: [] };
+
+  const collaborators = (collabRows ?? []).map((row) => ({
     pod_id: row.pod_id,
     profile_id: row.profile_id,
     can_direct: row.can_direct,
@@ -178,6 +179,21 @@ export default async function WorkspacePage({
           directed questions or swarm work already recorded in the pod.
         </p>
       </section>
+
+      {isSteward(memberRole, user.id) && (
+        <section className="panel space-y-2 p-4 sm:p-5">
+          <h2 className="text-sm font-medium text-calm-text">Steward</h2>
+          <p className="text-sm text-calm-muted">
+            Review community reports on public releases (advertising, spam, off-mission).
+          </p>
+          <Link
+            href="/workspace/steward"
+            className="text-sm text-calm-accent underline hover:text-calm-text"
+          >
+            Open steward queue
+          </Link>
+        </section>
+      )}
 
       <SiteFooter />
     </main>

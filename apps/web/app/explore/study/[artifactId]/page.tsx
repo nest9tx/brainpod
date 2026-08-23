@@ -5,6 +5,7 @@ import SiteNav from '@/components/site-nav';
 import SiteFooter from '@/components/site-footer';
 import PublicInsights from '@/components/public-insights';
 import CopyStudyButton from '@/components/copy-study-button';
+import ReportStudyButton from '@/components/report-study-button';
 
 function formatPublicStudyText(args: {
   question: string | null;
@@ -154,6 +155,15 @@ export default async function PublicStudyPage({ params }: { params: { artifactId
         isSignedIn={!!user}
         currentUserId={user?.id}
       />
+
+      <section className="space-y-2 border-t border-calm-border-soft pt-6">
+        <h2 className="text-sm font-medium text-calm-text">Care of the commons</h2>
+        <p className="text-xs leading-relaxed text-calm-muted">
+          Brainpod is a collaborative public-benefit space under LuminaNova.org — not an advertising board.
+          Releases should advance shared understanding. Pure self-promotion and link spam do not belong here.
+        </p>
+        <ReportStudyButton artifactId={artifact.id} isSignedIn={!!user} />
+      </section>
 
       <section className="space-y-2 border-t border-calm-border-soft pt-6">
         <h2 className="text-sm font-medium text-calm-text">How to read this page</h2>
