@@ -116,12 +116,13 @@ export default async function WorkspacePage({
     ownedIds.length > 0
       ? await admin
           .from('private_pod_permissions')
-          .select('pod_id, profile_id, can_direct, profiles(display_name)')
+          .select('id, pod_id, profile_id, can_direct, profiles(display_name)')
           .in('pod_id', ownedIds)
           .neq('profile_id', user.id)
       : { data: [] };
 
   const collaborators = (collabRows ?? []).map((row) => ({
+    permission_id: row.id,
     pod_id: row.pod_id,
     profile_id: row.profile_id,
     can_direct: row.can_direct,
