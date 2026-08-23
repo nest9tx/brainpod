@@ -54,3 +54,5 @@ export function tierLabel(role: string | null | undefined): string {
  */
 export const STRIPE_PRICE_SUSTAINING =
   process.env.STRIPE_PRICE_SUSTAINING ?? 'price_1U7Ng65cgdJTbsqKV7YueutV';
+
+export const SUSTAINING_MONTHLY_DISPLAY = '$15 / month';
