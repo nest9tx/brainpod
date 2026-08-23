@@ -4,7 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { REPORT_REASON_LABELS, type ReportReason } from '@/lib/steward';
 
-type ReportRow = {
+export type ReportRow = {
   id: string;
   reason: ReportReason;
   note: string | null;
