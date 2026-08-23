@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import {
+  countExternalUrls,
+  MAX_EXTERNAL_LINKS_IN_INSIGHT,
+} from '@/lib/link-limits';
 
 const MAX_BODY = 800;
 
@@ -49,6 +53,16 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  if (countExternalUrls(text) > MAX_EXTERNAL_LINKS_IN_INSIGHT) {
+    return NextResponse.json(
+      {
+        error: 'too_many_external_links',
+        detail: `Public insights may include at most ${MAX_EXTERNAL_LINKS_IN_INSIGHT} external link. Prefer observation over advertising.`,
+      },
+      { status: 400 }
+    );
+  }
+
   const supabase = createClient();
   const {
     data: { user },
@@ -85,7 +99,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         error: 'already_contributed',
-        detail: 'You already shared one insight on this study. One calm note per Director keeps the commons readable.',
+        detail:
+          'You already shared one insight on this study. One calm note per Director keeps the commons readable.',
       },
       { status: 409 }
     );

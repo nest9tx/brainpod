@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import {
+  countExternalUrls,
+  listExternalUrls,
+  MAX_EXTERNAL_LINKS_IN_RELEASE,
+} from '@/lib/link-limits';
 
 function isDistinctSummary(summary: string, question: string): boolean {
   const s = summary.trim().toLowerCase();
@@ -50,6 +55,21 @@ export async function PATCH(request: NextRequest) {
     );
   }
 
+  // Commons is collaborative research, not an ad board.
+  if (publish) {
+    const externalCount = countExternalUrls(summary);
+    if (externalCount > MAX_EXTERNAL_LINKS_IN_RELEASE) {
+      return NextResponse.json(
+        {
+          error: 'too_many_external_links',
+          detail: `Public release notes may include at most ${MAX_EXTERNAL_LINKS_IN_RELEASE} external links. Brainpod is a collaborative commons under LuminaNova.org — not a place to publish advertising. Keep references sparse and study-relevant.`,
+          external_urls: listExternalUrls(summary),
+        },
+        { status: 400 }
+      );
+    }
+  }
+
   const updatePayload = publish
     ? {
         public_release: true,
@@ -58,7 +78,6 @@ export async function PATCH(request: NextRequest) {
       }
     : {
         public_release: false,
-        // Keep the last summary draft available in Workspace after unpublish.
         public_summary: summary || null,
         public_summary_source: summary ? ('owner_authored' as const) : null,
       };
@@ -75,6 +94,23 @@ export async function PATCH(request: NextRequest) {
       { error: 'artifact_release_failed', detail: error?.message },
       { status: 500 }
     );
+  }
+
+  // Soft steward signal: a release note that is mostly links may still pass the hard cap
+  // but is worth a quiet queue entry when density is high relative to text length.
+  if (publish && summary) {
+    const urls = listExternalUrls(summary);
+    const linkChars = urls.reduce((n, u) => n + u.length, 0);
+    if (urls.length >= 2 && linkChars / Math.max(summary.length, 1) > 0.35) {
+      await admin.from('content_reports').insert({
+        artifact_id: id,
+        reporter_id: null,
+        reason: 'self_promotion',
+        note: 'System: release note is link-dense relative to text. Optional steward review.',
+        status: 'open',
+        source: 'system',
+      });
+    }
   }
 
   return NextResponse.json({ artifact: updated });
