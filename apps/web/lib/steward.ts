@@ -1,15 +1,13 @@
-import type { UserRole } from '@/lib/tiers';
-
 /**
- * Steward access: profiles.role = 'steward', or user id listed in STEWARD_USER_IDS.
- * Set your own profile role in Supabase once:
- *   update profiles set role = 'steward' where id = '<your-user-uuid>';
+ * Steward access is independent of membership tier.
+ * Prefer profiles.is_steward = true (keeps sustaining_member / free_public intact).
+ * Fallback: STEWARD_USER_IDS env (comma-separated profile UUIDs).
  */
 export function isSteward(
-  role: string | null | undefined,
+  isStewardFlag: boolean | null | undefined,
   userId: string | null | undefined
 ): boolean {
-  if (role === 'steward') return true;
+  if (isStewardFlag === true) return true;
   if (!userId) return false;
   const envList = process.env.STEWARD_USER_IDS ?? '';
   if (!envList.trim()) return false;

@@ -16,11 +16,11 @@ export default async function StewardPage() {
   const admin = createAdminClient();
   const { data: profile } = await admin
     .from('profiles')
-    .select('role, display_name')
+    .select('role, display_name, is_steward')
     .eq('id', user.id)
     .maybeSingle();
 
-  if (!isSteward(profile?.role, user.id)) {
+  if (!isSteward(profile?.is_steward, user.id)) {
     redirect('/workspace');
   }
 
@@ -41,7 +41,7 @@ export default async function StewardPage() {
         <h1 className="text-2xl font-medium text-calm-text">Open reports</h1>
         <p className="text-sm text-calm-muted">
           Human review only. Prefer unpublishing clear advertising; dismiss careful false positives.
-          No automatic bans in this phase.
+          No automatic bans in this phase. Membership tier is independent of steward access.
         </p>
       </header>
       <StewardQueue initialReports={reports ?? []} />

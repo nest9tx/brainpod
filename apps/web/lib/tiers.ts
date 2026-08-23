@@ -4,7 +4,7 @@ export type UserRole =
   | 'institutional_partner'
   | 'native_agent'
   | 'byoa_agent'
-  | 'steward';
+  | 'steward'; // legacy enum value; prefer is_steward flag + membership role
 
 export const TIER_DAILY_LIMITS: Record<string, number> = {
   free_public: 5,
@@ -12,7 +12,7 @@ export const TIER_DAILY_LIMITS: Record<string, number> = {
   institutional_partner: 100,
   native_agent: 5,
   byoa_agent: 5,
-  steward: 100,
+  steward: 100, // only if someone is still on legacy role=steward
 };
 
 export function dailyLimitForRole(role: string | null | undefined): number {
@@ -40,7 +40,8 @@ export function tierLabel(role: string | null | undefined): string {
     case 'institutional_partner':
       return 'Institutional Partner';
     case 'steward':
-      return 'Steward';
+      // Legacy; should not be used once is_steward is set and role restored.
+      return 'Steward (legacy role — restore membership tier)';
     default:
       return 'Public Benefit (Free)';
   }

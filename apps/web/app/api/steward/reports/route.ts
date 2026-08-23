@@ -13,11 +13,11 @@ async function requireSteward() {
   const admin = createAdminClient();
   const { data: profile } = await admin
     .from('profiles')
-    .select('role')
+    .select('role, is_steward')
     .eq('id', user.id)
     .maybeSingle();
 
-  if (!isSteward(profile?.role, user.id)) {
+  if (!isSteward(profile?.is_steward, user.id)) {
     return { error: NextResponse.json({ error: 'forbidden' }, { status: 403 }) };
   }
 
