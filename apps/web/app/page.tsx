@@ -98,7 +98,11 @@ async function importLegacyTurns(
   }
 }
 
-export default async function Home({ searchParams }: { searchParams: { pod?: string } }) {
+export default async function Home({
+  searchParams,
+}: {
+  searchParams: { pod?: string; from_study?: string };
+}) {
   const supabase = createClient();
   const {
     data: { user },
@@ -264,6 +268,38 @@ export default async function Home({ searchParams }: { searchParams: { pod?: str
   }
   initialCycles.reverse();
 
+  // Soft lineage seed from a public Explore study (no history fork).
+  let seedFromStudy: {
+    question: string;
+    note: string;
+    referenceUrl: string;
+    studyId: string;
+  } | null = null;
+
+  const fromStudyId = searchParams.from_study?.trim();
+  if (fromStudyId) {
+    const { data: source } = await supabase
+      .from('artifacts')
+      .select('id, question, public_summary')
+      .eq('id', fromStudyId)
+      .eq('public_release', true)
+      .maybeSingle();
+
+    if (source?.question?.trim()) {
+      const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://www.brainpod.org';
+      const studyUrl = `${siteUrl.replace(/\/$/, '')}/explore/study/${source.id}`;
+      const summaryBit = source.public_summary?.trim()
+        ? `\nSource release note (public): ${source.public_summary.trim().slice(0, 400)}`
+        : '';
+      seedFromStudy = {
+        question: source.question.trim(),
+        note: `Continuing inquiry from a public Brainpod commons study.${summaryBit}\nThis is a new private cycle — source history was not copied.`,
+        referenceUrl: studyUrl,
+        studyId: source.id,
+      };
+    }
+  }
+
   return (
     <OrientationPod
       podId={pod.id}
@@ -274,6 +310,7 @@ export default async function Home({ searchParams }: { searchParams: { pod?: str
       userEmail={user.email ?? ''}
       currentDirectorLabel={directorLabel}
       memberRole={memberRole}
+      seedFromStudy={seedFromStudy}
     />
   );
 }
