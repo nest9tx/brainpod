@@ -7,6 +7,7 @@ import PublicInsights from '@/components/public-insights';
 import CopyStudyButton from '@/components/copy-study-button';
 import DownloadMarkdownButton from '@/components/download-markdown-button';
 import ReportStudyButton from '@/components/report-study-button';
+import StartFromStudyButton from '@/components/start-from-study-button';
 import { formatStudyMarkdown, studyMarkdownFilename } from '@/lib/study-markdown';
 
 export default async function PublicStudyPage({ params }: { params: { artifactId: string } }) {
@@ -91,6 +92,8 @@ export default async function PublicStudyPage({ params }: { params: { artifactId
               : 'Released for observation · not verified'}
         </p>
       </header>
+
+      <StartFromStudyButton artifactId={artifact.id} isSignedIn={!!user} />
 
       <section className="panel space-y-3 p-5 sm:p-6">
         <h2 className="text-sm font-medium text-calm-text">Director question</h2>
