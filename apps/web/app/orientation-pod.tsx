@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import SiteNav from '@/components/site-nav';
 import SiteFooter from '@/components/site-footer';
 import { labelUntilUtcReset } from '@/lib/utc-reset';
@@ -27,6 +28,13 @@ type Cycle = {
   attachmentName?: string | null;
 };
 
+type SeedFromStudy = {
+  question: string;
+  note: string;
+  referenceUrl: string;
+  studyId: string;
+};
+
 type OrientationPodProps = {
   podId: string;
   podName: string;
@@ -42,8 +50,9 @@ type OrientationPodProps = {
   }[];
   userEmail: string;
   currentDirectorLabel?: string;
-  /** Used for limit messaging (upgrade CTA vs pure reset). */
   memberRole?: string;
+  /** Soft lineage from Explore — seeds the form, does not fork history. */
+  seedFromStudy?: SeedFromStudy | null;
 };
 
 function parseVerdictFromVeritasText(text: string | undefined): Verdict | null {
@@ -211,10 +220,11 @@ function ContributionNote({ verdict }: { verdict: Verdict }) {
 export default function OrientationPod({
   podId, podName, podSummary, initialRemainingPrompts, initialCycles, userEmail, currentDirectorLabel = 'Director',
   memberRole = 'free_public',
+  seedFromStudy = null,
 }: OrientationPodProps) {
-  const [directorPrompt, setDirectorPrompt] = useState('');
-  const [directorNote, setDirectorNote] = useState('');
-  const [referenceUrl, setReferenceUrl] = useState('');
+  const [directorPrompt, setDirectorPrompt] = useState(seedFromStudy?.question ?? '');
+  const [directorNote, setDirectorNote] = useState(seedFromStudy?.note ?? '');
+  const [referenceUrl, setReferenceUrl] = useState(seedFromStudy?.referenceUrl ?? '');
   const [attachmentName, setAttachmentName] = useState('');
   const [attachmentText, setAttachmentText] = useState('');
   const [attachmentError, setAttachmentError] = useState('');
@@ -232,9 +242,13 @@ export default function OrientationPod({
   const [pendingQuestion, setPendingQuestion] = useState<string | null>(null);
   const [status, setStatus] = useState<'idle' | 'thinking' | 'error' | 'limit_reached' | 'duplicate'>('idle');
   const [remainingPrompts, setRemainingPrompts] = useState(initialRemainingPrompts);
-  const [isFollowUp, setIsFollowUp] = useState(initialCycles.length > 0);
-  const [resumeCycleIndex, setResumeCycleIndex] = useState<number | null>(initialCycles.length > 0 ? 0 : null);
+  // Seeded studies start as a fresh directed cycle (not a follow-up on prior private work).
+  const [isFollowUp, setIsFollowUp] = useState(initialCycles.length > 0 && !seedFromStudy);
+  const [resumeCycleIndex, setResumeCycleIndex] = useState<number | null>(
+    initialCycles.length > 0 && !seedFromStudy ? 0 : null
+  );
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
+  const [showSeedBanner, setShowSeedBanner] = useState(Boolean(seedFromStudy));
 
   async function handleDirect() {
     if (!directorPrompt.trim() || remainingPrompts <= 0) return;
@@ -287,6 +301,7 @@ export default function OrientationPod({
       setDirectorPrompt(''); setDirectorNote(''); setReferenceUrl('');
       setAttachmentName(''); setAttachmentText(''); setAttachmentError('');
       setAttachmentInputKey((k) => k + 1); setIsFollowUp(true);
+      setShowSeedBanner(false);
       setRemainingPrompts((n) => Math.max(n - 1, 0)); setStatus('idle');
     } catch {
       setStatus('error'); setPendingQuestion(null);
@@ -297,6 +312,7 @@ export default function OrientationPod({
     setIsFollowUp(false); setResumeCycleIndex(null); setDirectorPrompt('');
     setDirectorNote(''); setReferenceUrl(''); setAttachmentName(''); setAttachmentText('');
     setAttachmentError(''); setAttachmentInputKey((k) => k + 1);
+    setShowSeedBanner(false);
   }
 
   async function onAttachmentSelected(file: File | null) {
@@ -333,6 +349,7 @@ export default function OrientationPod({
     setDirectorPrompt(''); setDirectorNote(''); setReferenceUrl('');
     setAttachmentName(''); setAttachmentText(''); setAttachmentError('');
     setAttachmentInputKey((k) => k + 1);
+    setShowSeedBanner(false);
     if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
@@ -349,7 +366,7 @@ export default function OrientationPod({
 
   const activeCycle = isFollowUp && resumeCycleIndex !== null ? cycles[resumeCycleIndex] : cycles[0];
   const activeModeLabel = MODE_OPTIONS.find((o) => o.id === mode)?.label ?? 'Construct & Verify';
-  const isFirstExperience = cycles.length === 0 && !pendingQuestion;
+  const isFirstExperience = cycles.length === 0 && !pendingQuestion && !seedFromStudy;
 
   return (
     <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-6 px-4 py-8 sm:gap-8 sm:px-6 sm:py-12">
@@ -367,6 +384,24 @@ export default function OrientationPod({
       <div className="panel p-4 text-sm text-calm-muted">
         {remainingPrompts} Director prompt{remainingPrompts === 1 ? '' : 's'} remaining today · resets 00:00 UTC
       </div>
+
+      {showSeedBanner && seedFromStudy && (
+        <div className="rounded-lg border border-calm-accent/30 bg-calm-accent/5 p-4 text-sm text-calm-text">
+          <p className="font-medium">Seeded from the public commons</p>
+          <p className="mt-2 text-calm-muted">
+            The question, a soft lineage note, and a reference link to the source study are ready below.
+            History was not copied. Choose a mode, edit anything you need, then send when ready.
+          </p>
+          <p className="mt-2">
+            <Link
+              href={`/explore/study/${seedFromStudy.studyId}`}
+              className="text-calm-accent underline hover:text-calm-text"
+            >
+              View source study
+            </Link>
+          </p>
+        </div>
+      )}
 
       {isFirstExperience && (
         <div className="rounded-lg border border-calm-accent/30 bg-calm-accent/5 p-4 text-sm text-calm-text">
@@ -400,11 +435,13 @@ export default function OrientationPod({
       <section className="panel-elevated space-y-3 p-4 sm:p-5">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <label htmlFor="director-prompt" className="text-sm font-medium text-calm-text">
-            {isFollowUp ? 'Continue the conversation' : 'Direct the swarm'}
+            {isFollowUp ? 'Continue the conversation' : seedFromStudy && showSeedBanner ? 'Direct from seeded study' : 'Direct the swarm'}
           </label>
-          {isFollowUp && cycles.length > 0 && (
-            <button onClick={startFresh} className="text-xs text-calm-muted underline hover:text-calm-text">Start a fresh question instead</button>
-          )}
+          {(isFollowUp && cycles.length > 0) || showSeedBanner ? (
+            <button onClick={startFresh} className="text-xs text-calm-muted underline hover:text-calm-text">
+              Start a fresh question instead
+            </button>
+          ) : null}
         </div>
         {isFollowUp && activeCycle && (
           <div className="rounded-md border border-calm-border/60 bg-calm-bg/50 px-3 py-2 text-xs text-calm-muted">
